@@ -1,1 +1,5 @@
 Rec-Sys-Challenge-Github-Repo/.neptune/*
+Rec-Sys-Challenge-Github-Repo/training_pipeline/.ipynb_checkpoints
+scores/.ipynb_checkpoints
+**/.ipynb_checkpoints/
+embeddings/*
