@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+import hashlib
 from contrastive_embeddings.constants import EventTypes, EVENT_TYPE_TO_COLUMNS, SESSION_GAP_SECONDS
 
 
@@ -10,9 +10,10 @@ import pandas as pd
 from tqdm import tqdm
 from contrastive_embeddings.constants import EventTypes, EVENT_TYPE_TO_COLUMNS, SESSION_GAP_SECONDS
 
+
 def hash_string_to_float(s: str) -> float:
-    # Deterministic hash of string to float [0,1)
-    return (hash(s) % 10000) / 10000.0
+    h = hashlib.md5(s.encode()).hexdigest()
+    return int(h[:8], 16) / 0xFFFFFFFF  # normalize to [0,1]
 
 def load_parquet(file_path):
     return pd.read_parquet(file_path)
@@ -20,6 +21,12 @@ def load_parquet(file_path):
 def extract_session_features(df, event_type):
     df = df.sort_values(["client_id", "timestamp"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit='s')
+
+    # Determine dynamic max price (99th percentile) for normalization
+    max_price = 1.0
+    if "price" in df.columns:
+        max_price = np.percentile(df["price"].dropna(), 99)
+        max_price = max(max_price, 1.0)  # Avoid zero or near-zero
 
     sessions = []
     current_session = []
@@ -39,19 +46,33 @@ def extract_session_features(df, event_type):
 
         features = []
         for col in EVENT_TYPE_TO_COLUMNS[event_type]:
-            if col in row:
-                val = row[col]
-                if isinstance(val, str):
-                    val = hash_string_to_float(val)
+            val = row.get(col, "")
+            if col == "price":
+                if isinstance(val, (int, float)) and not pd.isnull(val):
+                    val = val / max_price
                 else:
+                    try:
+                        val = float(val)
+                        val = val / max_price
+                    except (ValueError, TypeError):
+                        val = 0.0
+            elif isinstance(val, str):
+                if val.strip() == "":
+                    val = 0.0
+                else:
+                    val = hash_string_to_float(val)
+            else:
+                try:
                     val = float(val)
-                features.append(val)
+                except (ValueError, TypeError):
+                    val = 0.0
+            features.append(val)
+
         if features:
             current_session.append(features)
 
         last_ts = ts
 
-    # Add last session
     if current_session:
         sessions.append((current_client, current_session))
 
@@ -62,7 +83,6 @@ def extract_session_features(df, event_type):
         if arr.size > 0:
             client_feats.setdefault(client_id, []).append(arr.mean(axis=0))
 
-    # Average across sessions
     for client_id in client_feats:
         client_feats[client_id] = np.mean(client_feats[client_id], axis=0)
 
@@ -104,9 +124,78 @@ def main(data_dir, embeddings_dir):
     clients = list(merged_features.keys())
     embeddings = np.stack([merged_features[c] for c in clients])
 
+    print(embeddings[np.random.choice(len(embeddings), 5)])
+
+    embeddings = embeddings.astype(np.float32)
+
+    # Print basic statistics before saving embeddings
+    print(":::::::::::::::Before Fixes:::::::::::::::")
+    print("Embedding shape:", embeddings.shape)
+    print("Embedding dtype:", embeddings.dtype)
+    
+    # Check for NaN or Inf values
+    num_nan = np.isnan(embeddings).sum()
+    num_posinf = np.isposinf(embeddings).sum()
+    num_neginf = np.isneginf(embeddings).sum()
+    
+    print(f"NaNs: {num_nan}, +Inf: {num_posinf}, -Inf: {num_neginf}")
+    
+    # Optional: Check for extreme values
+    print("Min value:", np.min(embeddings))
+    print("Max value:", np.max(embeddings))
+    print("Mean value:", np.mean(embeddings))
+    print("Std deviation:", np.std(embeddings))
+
+    finite_vals = embeddings[np.isfinite(embeddings)]
+    print("Finite count:", len(finite_vals))
+    print("Min finite:", finite_vals.min())
+    print("Max finite:", finite_vals.max())
+
+    if len(finite_vals) == 0:
+        raise ValueError("All embeddings are non-finite! Check the contrastive model output.")
+    
+    # Compute dynamic thresholds
+    # finite_vals = embeddings[np.isfinite(embeddings)]   # finite_vals is already being assigned.
+    lower_bound = np.percentile(finite_vals, 1)   # e.g. 1st percentile
+    upper_bound = np.percentile(finite_vals, 99)  # e.g. 99th percentile
+
+    # Replace NaN and infinities
+    embeddings = np.nan_to_num(embeddings, nan=0.0, posinf=upper_bound, neginf=lower_bound)
+
+    # # Clip all values to this range (extra safety)
+    # embeddings = np.clip(embeddings, lower_bound, upper_bound)
+
+    # Compute L2 norms for each embedding vector (row-wise)
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    
+    # Avoid division by zero: set zero norms to 1 to keep those vectors unchanged
+    norms[norms == 0] = 1  # Avoid divide by zero
+    
+    # Normalize embeddings by their norms (L2 normalization)
+    embeddings = embeddings / norms
+
+
+    print(":::::::::::::::After Fixes:::::::::::::::")
+
+    print("Embedding shape:", embeddings.shape)
+    print("Embedding dtype:", embeddings.dtype)
+    
+    # Check for NaN or Inf values
+    num_nan = np.isnan(embeddings).sum()
+    num_posinf = np.isposinf(embeddings).sum()
+    num_neginf = np.isneginf(embeddings).sum()
+    
+    print(f"NaNs: {num_nan}, +Inf: {num_posinf}, -Inf: {num_neginf}")
+    
+    # Optional: Check for extreme values
+    print("Min value:", np.min(embeddings))
+    print("Max value:", np.max(embeddings))
+    print("Mean value:", np.mean(embeddings))
+    print("Std deviation:", np.std(embeddings))
+
     # Convert to float16 to satisfy validator
     embeddings = embeddings.astype(np.float16)
-
+    
     os.makedirs(embeddings_dir, exist_ok=True)
     np.save(os.path.join(embeddings_dir, "client_ids.npy"), np.array(clients))
     np.save(os.path.join(embeddings_dir, "embeddings.npy"), embeddings)
