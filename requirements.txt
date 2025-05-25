@@ -1,1 +1,5 @@
-Add you requirements here
+# requirements.txt
+
+tf-keras
+sentence-transformers
+neptune>=1.0
