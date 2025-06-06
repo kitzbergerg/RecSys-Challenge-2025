@@ -162,8 +162,8 @@ class FeaturesAggregator:
 
             calculators.append(RecencyCalculator(max_date=max_date))
 
-            if "sku" in df.columns and product_properties is not None:
-                calculators.append(PriceStatsCalculator(product_properties=product_properties))
+            #if "sku" in df.columns and product_properties is not None:
+            #    calculators.append(PriceStatsCalculator(product_properties=product_properties))
 
             if event_type is EventTypes.ADD_TO_CART and buy_events is not None:
                 calculators.append(CartAbandonmentCalculator(buy_events=buy_events))
@@ -172,7 +172,7 @@ class FeaturesAggregator:
             for col in columns:
                 calculators.append(DiversityCalculator(column=col))
 
-            return CombinedCalculator(calculators=calculators)
+        return CombinedCalculator(calculators=calculators)
 
     def _filter_events_to_relevant_clients(
         self,
