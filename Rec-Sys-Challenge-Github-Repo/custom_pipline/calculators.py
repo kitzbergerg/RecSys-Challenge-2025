@@ -102,6 +102,7 @@ class QueryFeaturesCalculator(Calculator):
         return quantized_query_representations.mean(axis=0)
 
 
+
 class StatsFeaturesCalculator(Calculator):
     """
     Calculator class for computing statistical features for a given event type.
@@ -226,6 +227,30 @@ class CartAbandonmentCalculator(Calculator):
         abandoned = added_skus - self.buy_skus
         abandonment_ratio = len(abandoned) / max(len(added_skus), 1)
         return np.array([abandonment_ratio], dtype=EMBEDDINGS_DTYPE)
+
+
+
+class BuyStatsCalculator(Calculator):
+    def __init__(self):
+        self._features_size = 3  # total_buys, unique_buys, buys_per_day
+
+    @property
+    def features_size(self) -> int:
+        return self._features_size
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        if events.empty:
+            return np.zeros(self.features_size, dtype=EMBEDDINGS_DTYPE)
+
+        events["timestamp"] = pd.to_datetime(events["timestamp"])
+        total_buys = len(events)
+        unique_buys = events["sku"].nunique()
+        timespan = (events["timestamp"].max() - events["timestamp"].min()).days + 1
+        buys_per_day = total_buys / max(timespan, 1)
+
+        return np.array([total_buys, unique_buys, buys_per_day], dtype=EMBEDDINGS_DTYPE)
+
+
 
 class CombinedCalculator(Calculator):
     def __init__(self, calculators: List[Calculator]):

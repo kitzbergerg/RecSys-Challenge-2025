@@ -9,7 +9,9 @@ from custom_pipline.calculators import (
     RecencyCalculator,
     DiversityCalculator,
     PriceStatsCalculator,
-    CartAbandonmentCalculator, CombinedCalculator,
+    CartAbandonmentCalculator, 
+    BuyStatsCalculator,
+    CombinedCalculator,
 )
 from custom_pipline.constants import (
     EventTypes,
@@ -162,11 +164,14 @@ class FeaturesAggregator:
 
             calculators.append(RecencyCalculator(max_date=max_date))
 
-            #if "sku" in df.columns and product_properties is not None:
-            #    calculators.append(PriceStatsCalculator(product_properties=product_properties))
+            if "sku" in df.columns and product_properties is not None:
+                calculators.append(PriceStatsCalculator(product_properties=product_properties))
 
             if event_type is EventTypes.ADD_TO_CART and buy_events is not None:
                 calculators.append(CartAbandonmentCalculator(buy_events=buy_events))
+
+            if event_type is EventTypes.PRODUCT_BUY:
+                calculators.append(BuyStatsCalculator())
 
             # You could even loop through all relevant categorical columns
             for col in columns:
