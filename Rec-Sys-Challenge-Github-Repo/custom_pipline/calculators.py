@@ -193,6 +193,7 @@ class DiversityCalculator(Calculator):
 # --- Price Statistics Calculator ---
 class PriceStatsCalculator(Calculator):
     def __init__(self):
+        pass
         #self.product_properties = product_properties.set_index("sku")
 
     @property
