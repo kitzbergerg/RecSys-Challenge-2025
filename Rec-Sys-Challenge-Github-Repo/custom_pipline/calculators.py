@@ -192,8 +192,8 @@ class DiversityCalculator(Calculator):
 
 # --- Price Statistics Calculator ---
 class PriceStatsCalculator(Calculator):
-    def __init__(self, product_properties: pd.DataFrame):
-        self.product_properties = product_properties.set_index("sku")
+    def __init__(self):
+        #self.product_properties = product_properties.set_index("sku")
 
     @property
     def features_size(self) -> int:
