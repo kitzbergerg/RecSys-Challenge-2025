@@ -200,8 +200,7 @@ class PriceStatsCalculator(Calculator):
         return 3
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
-        joined = events.join(self.product_properties, on="sku", how="left", rsuffix="_prop")
-        prices = joined["price_prop"].dropna().astype(float)
+        prices = events["price_prop"].dropna().astype(float)
         if prices.empty:
             return np.zeros(3, dtype=EMBEDDINGS_DTYPE)
         return np.array([
@@ -250,6 +249,31 @@ class BuyStatsCalculator(Calculator):
 
         return np.array([total_buys, unique_buys, buys_per_day], dtype=EMBEDDINGS_DTYPE)
 
+#add feature for interaction duration based on timestamp events
+class InteractionDurationCalculator(Calculator):
+    @property
+    def features_size(self) -> int:
+        return 1
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        if events.empty or "timestamp" not in events.columns:
+            return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
+        duration = (events["timestamp"].max() - events["timestamp"].min()).total_seconds()
+        return np.array([duration], dtype=EMBEDDINGS_DTYPE)
+
+class SessionCountCalculator(Calculator):
+    def __init__(self, session_column: str = "session_id"):
+        self.session_column = session_column
+
+    @property
+    def features_size(self) -> int:
+        return 1
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        if self.session_column not in events.columns or events.empty:
+            return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
+        unique_sessions = events[self.session_column].nunique()
+        return np.array([unique_sessions], dtype=EMBEDDINGS_DTYPE)
 
 
 class CombinedCalculator(Calculator):

@@ -12,7 +12,9 @@ from custom_pipline.calculators import (
     CartAbandonmentCalculator, 
     BuyStatsCalculator,
     CombinedCalculator,
-)
+    SessionCountCalculator,
+    InteractionDurationCalculator
+    )
 from custom_pipline.constants import (
     EventTypes,
     EVENT_TYPE_TO_COLUMNS,
@@ -164,8 +166,16 @@ class FeaturesAggregator:
 
             calculators.append(RecencyCalculator(max_date=max_date))
 
+            calculators.append(SessionCountCalculator(session_column="session_id"))
+
+            calculators.append(InteractionDurationCalculator())
+
             #if "sku" in df.columns and product_properties is not None:
             #    calculators.append(PriceStatsCalculator(product_properties=product_properties))
+
+            #fix performance issue with pricestatscalculator
+            if "price_prop" in df.columns:
+                calculators.append(PriceStatsCalculator())
 
             if event_type is EventTypes.ADD_TO_CART and buy_events is not None:
                 calculators.append(CartAbandonmentCalculator(buy_events=buy_events))
@@ -209,6 +219,11 @@ class FeaturesAggregator:
         """
 
         df = self._filter_events_to_relevant_clients(df)
+
+        #fix performance issue with pricestatscalculator, join not on client level
+        if product_properties is not None and 'sku' in df.columns:
+            product_properties = product_properties.set_index("sku")
+            df = df.join(product_properties, on="sku", how="left", rsuffix="_prop")
 
         calculator = self.get_calculator(
             event_type=event_type,
