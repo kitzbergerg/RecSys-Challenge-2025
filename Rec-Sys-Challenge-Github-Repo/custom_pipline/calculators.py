@@ -260,6 +260,8 @@ class InteractionDurationCalculator(Calculator):
         if events.empty or "timestamp" not in events.columns:
             return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
         duration = (events["timestamp"].max() - events["timestamp"].min()).total_seconds()
+        if duration == np.inf or duration < 0:
+            duration = 0.0
         return np.array([duration], dtype=EMBEDDINGS_DTYPE)
 
 class SessionCountCalculator(Calculator):
