@@ -259,7 +259,7 @@ class InteractionDurationCalculator(Calculator):
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
         if events.empty or "timestamp" not in events.columns:
             return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
-        duration = (events["timestamp"].max() - events["timestamp"].min()).total_seconds()/60
+        duration = (events["timestamp"].max() - events["timestamp"].min()).total_seconds()/3600
         if duration == np.inf or duration < 0:
             duration = 0.0
         return np.array([duration], dtype=EMBEDDINGS_DTYPE)
