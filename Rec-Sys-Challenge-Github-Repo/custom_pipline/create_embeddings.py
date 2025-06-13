@@ -77,8 +77,8 @@ def create_embeddings(
     product_properties = pd.read_parquet(data_dir.data_dir / "product_properties.parquet")
 
     logger.info("Loading buy events...")
-    #buy_df = pd.read_parquet(data_dir.data_dir / "product_buy.parquet")
-    buy_df = load_with_properties(data_dir.data_dir, event_type=EventTypes.PRODUCT_BUY.value)
+    buy_df = pd.read_parquet(data_dir.data_dir / "product_buy.parquet")
+    #buy_df = load_with_properties(data_dir.data_dir, event_type=EventTypes.PRODUCT_BUY.value)
     buy_df["timestamp"] = pd.to_datetime(buy_df["timestamp"])
     display(buy_df)
     for event_type in EVENT_TYPE_TO_COLUMNS.keys():
