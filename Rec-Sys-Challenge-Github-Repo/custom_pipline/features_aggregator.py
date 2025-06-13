@@ -244,8 +244,6 @@ class FeaturesAggregator:
         #    product_properties = product_properties.set_index("sku")
         #    df = df.join(product_properties, on="sku", how="left", rsuffix="_prop")
 
-        top_categories = df["category_id"].value_counts().head(20).index
-
         calculator = self.get_calculator(
             event_type=event_type,
             df=df,
