@@ -201,7 +201,7 @@ class PriceStatsCalculator(Calculator):
         return 3
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
-        prices = events["price_prop"].dropna().astype(float)
+        prices = events["price"].dropna().astype(float)
         if prices.empty:
             return np.zeros(3, dtype=EMBEDDINGS_DTYPE)
         return np.array([
