@@ -198,16 +198,19 @@ class PriceStatsCalculator(Calculator):
 
     @property
     def features_size(self) -> int:
-        return 3
+        return 4
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
         prices = events["price"].dropna().astype(float)
         if prices.empty:
-            return np.zeros(3, dtype=EMBEDDINGS_DTYPE)
+            return np.zeros(4, dtype=EMBEDDINGS_DTYPE)
+        
+
         return np.array([
             prices.mean(),
             prices.min(),
             prices.max(),
+            prices.std()
         ], dtype=EMBEDDINGS_DTYPE)
 
 
@@ -263,6 +266,8 @@ class InteractionDurationCalculator(Calculator):
         if duration == np.inf or duration < 0:
             duration = 0.0
         return np.array([duration], dtype=EMBEDDINGS_DTYPE)
+    
+
 
 class SessionCountCalculator(Calculator):
     def __init__(self, session_column: str = "session_id"):
@@ -278,7 +283,6 @@ class SessionCountCalculator(Calculator):
         unique_sessions = events[self.session_column].nunique()
         return np.array([unique_sessions], dtype=EMBEDDINGS_DTYPE)
     
-
 class DaysDistributionCalculator(Calculator):
     @property
     def features_size(self) -> int:
@@ -293,6 +297,29 @@ class DaysDistributionCalculator(Calculator):
         distribution = np.zeros(7, dtype=EMBEDDINGS_DTYPE)
         distribution[counts.index.to_numpy()] = counts.to_numpy()
         return distribution
+
+#to find the gaps between events and put them in features
+class TimeEventDiffCalculator(Calculator):
+    @property
+    def features_size(self) -> int:
+        return 4  
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        if events.empty or "timestamp" not in events.columns:
+            return np.zeros(self.features_size, dtype=EMBEDDINGS_DTYPE)
+
+        times = events["timestamp"].sort_values()
+        deltas = times.diff().dropna().dt.total_seconds()
+        if deltas.empty:
+            return np.zeros(self.features_size, dtype=EMBEDDINGS_DTYPE)
+
+        return np.array([
+            deltas.mean(),
+            deltas.median(),
+            deltas.min(),
+            deltas.max(),
+        ], dtype=EMBEDDINGS_DTYPE)
+
 
 class MonthDistributionCalculator(Calculator):
     @property

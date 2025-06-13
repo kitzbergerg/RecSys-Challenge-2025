@@ -13,7 +13,10 @@ from custom_pipline.calculators import (
     BuyStatsCalculator,
     CombinedCalculator,
     SessionCountCalculator,
-    InteractionDurationCalculator
+    InteractionDurationCalculator,
+    MonthDistributionCalculator,
+    DaysDistributionCalculator,
+    TimeEventDiffCalculator
     )
 from custom_pipline.constants import (
     EventTypes,
@@ -168,7 +171,9 @@ class FeaturesAggregator:
 
             calculators.append(SessionCountCalculator(session_column="session_id"))
 
-            calculators.append(InteractionDurationCalculator())
+            if "timestamp" in df.columns:
+                calculators.append(InteractionDurationCalculator())
+                calculators.append(TimeEventDiffCalculator())
 
             #if "sku" in df.columns and product_properties is not None:
             #    calculators.append(PriceStatsCalculator(product_properties=product_properties))
@@ -182,8 +187,9 @@ class FeaturesAggregator:
 
             if event_type is EventTypes.PRODUCT_BUY:
                 calculators.append(BuyStatsCalculator())
+                calculators.append(MonthDistributionCalculator())
+                calculators.append(DaysDistributionCalculator())
 
-            # You could even loop through all relevant categorical columns
             for col in columns:
                 calculators.append(DiversityCalculator(column=col))
 
