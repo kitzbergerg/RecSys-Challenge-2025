@@ -33,8 +33,8 @@ def load_with_properties(data_dir: DataDir, event_type: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: events DataFrame with product joined properties if available.
     """
-    #event_df = pd.read_parquet(data_dir.input_dir / f"{event_type}.parquet")
-    event_df = pd.read_parquet(data_dir.data_dir / f"{event_type}.parquet")
+    event_df = pd.read_parquet(data_dir.input_dir / f"{event_type}.parquet")
+    #event_df = pd.read_parquet(data_dir.data_dir / f"{event_type}.parquet")
     if event_type not in ["page_visit", "search_query"]:
         properties_df = pd.read_parquet(data_dir.properties_file)
         return join_properties(event_df=event_df, properties_df=properties_df)
