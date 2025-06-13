@@ -197,7 +197,7 @@ class FeaturesAggregator:
                 calculators.append(DiversityCalculator(column="sku"))
                 calculators.append(DiversityCalculator(column="category"))
                 calculators.append(ProductNameFeaturesCalculator(
-                name_column="name", single_query=df.iloc[0]["name"])
+                name_column="name", single_name=df.iloc[0]["name"])
             )
 
 
