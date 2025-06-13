@@ -278,6 +278,8 @@ class SessionCountCalculator(Calculator):
         return 1
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        print("check if session column exists in events DataFrame")
+        print(events.columns)
         if self.session_column not in events.columns or events.empty:
             return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
         unique_sessions = events[self.session_column].nunique()
@@ -336,6 +338,30 @@ class MonthDistributionCalculator(Calculator):
         distribution[counts.index.to_numpy() - 1] = counts.to_numpy()  # subtract 1 for zero-based indexing
 
         return distribution
+
+class PageVisitCalculator(Calculator):
+    @property
+    def features_size(self) -> int:
+        return 3
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        # check only on unique urls in page_visit events
+        count = len(events)
+        if events.empty or "url" not in events.columns:
+            unique_urls = 0.0
+            ratio = 0.0
+        else:
+            unique_urls = events["url"].nunique()
+            #revisits
+            url_counts = events["url"].value_counts()
+            revisits = url_counts[url_counts > 1].sum() - (url_counts > 1).sum()
+            total = len(events)
+            ratio = revisits / max(total, 1)
+
+
+        
+        return np.array([count, unique_urls, ratio], dtype=EMBEDDINGS_DTYPE)
+
 
 class CombinedCalculator(Calculator):
     def __init__(self, calculators: List[Calculator]):

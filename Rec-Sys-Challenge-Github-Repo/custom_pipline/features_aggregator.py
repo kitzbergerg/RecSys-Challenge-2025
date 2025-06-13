@@ -16,7 +16,8 @@ from custom_pipline.calculators import (
     InteractionDurationCalculator,
     MonthDistributionCalculator,
     DaysDistributionCalculator,
-    TimeEventDiffCalculator
+    TimeEventDiffCalculator,
+    PageVisitCalculator
     )
 from custom_pipline.constants import (
     EventTypes,
@@ -189,9 +190,14 @@ class FeaturesAggregator:
                 calculators.append(BuyStatsCalculator())
                 calculators.append(MonthDistributionCalculator())
                 calculators.append(DaysDistributionCalculator())
+                #this should only be done for product buy, otherwise category might be in multiple times (since sku is e.g. )
+                calculators.append(DiversityCalculator(column="sku"))
+                calculators.append(DiversityCalculator(column="category"))
 
-            for col in columns:
-                calculators.append(DiversityCalculator(column=col))
+            if event_type is EventTypes.PAGE_VISIT:
+                calculators.append(PageVisitCalculator())
+            
+            
 
         return CombinedCalculator(calculators=calculators)
 
