@@ -9,18 +9,18 @@ from custom_pipline.calculators import (
     RecencyCalculator,
     DiversityCalculator,
     PriceStatsCalculator,
-    CartAbandonmentCalculator, 
+    CartAbandonmentCalculator,
     BuyStatsCalculator,
     CombinedCalculator,
-    SessionCountCalculator,
     InteractionDurationCalculator,
     MonthDistributionCalculator,
     DaysDistributionCalculator,
     TimeEventDiffCalculator,
     PageVisitCalculator,
     QueryCountCalculator,
-    ProductNameFeaturesCalculator
-    )
+    ProductNameFeaturesCalculator,
+    RemoveFromCartCalculator
+)
 from custom_pipline.constants import (
     EventTypes,
     EVENT_TYPE_TO_COLUMNS,
@@ -173,14 +173,10 @@ class FeaturesAggregator:
 
             calculators.append(RecencyCalculator(max_date=max_date))
 
-            #calculators.append(SessionCountCalculator(session_column="session_id"))
-
             if "timestamp" in df.columns:
                 calculators.append(InteractionDurationCalculator())
                 calculators.append(TimeEventDiffCalculator())
 
-            #if "sku" in df.columns and product_properties is not None:
-            #    calculators.append(PriceStatsCalculator(product_properties=product_properties))
 
             #fix performance issue with pricestatscalculator
             if "price" in df.columns:
@@ -188,6 +184,9 @@ class FeaturesAggregator:
 
             if event_type is EventTypes.ADD_TO_CART and buy_events is not None:
                 calculators.append(CartAbandonmentCalculator(buy_events=buy_events))
+
+            if event_type is EventTypes.REMOVE_FROM_CART:
+                calculators.append(RemoveFromCartCalculator())
 
             if event_type is EventTypes.PRODUCT_BUY:
                 calculators.append(BuyStatsCalculator())
@@ -244,6 +243,8 @@ class FeaturesAggregator:
         #if product_properties is not None and 'sku' in df.columns:
         #    product_properties = product_properties.set_index("sku")
         #    df = df.join(product_properties, on="sku", how="left", rsuffix="_prop")
+
+        top_categories = df["category_id"].value_counts().head(20).index
 
         calculator = self.get_calculator(
             event_type=event_type,

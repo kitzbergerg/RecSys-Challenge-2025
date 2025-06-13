@@ -231,7 +231,29 @@ class CartAbandonmentCalculator(Calculator):
         abandonment_ratio = len(abandoned) / max(len(added_skus), 1)
         return np.array([abandonment_ratio], dtype=EMBEDDINGS_DTYPE)
 
+class RemoveFromCartCalculator(Calculator):
+    """
+    Calculator for remove_from_cart events.
+    Computes:
+    - total number of remove_from_cart events
+    - number of unique SKUs removed
+    """
 
+    def __init__(self):
+        pass
+
+    @property
+    def features_size(self) -> int:
+        return 2
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        if events.empty:
+            return np.zeros(self.features_size, dtype=EMBEDDINGS_DTYPE)
+
+        total_removes = len(events)
+        unique_skus = events["sku"].nunique() if "sku" in events.columns else 0
+
+        return np.array([total_removes, unique_skus], dtype=EMBEDDINGS_DTYPE)
 
 class BuyStatsCalculator(Calculator):
     def __init__(self):
@@ -266,24 +288,7 @@ class InteractionDurationCalculator(Calculator):
         if duration == np.inf or duration < 0:
             duration = 0.0
         return np.array([duration], dtype=EMBEDDINGS_DTYPE)
-    
 
-
-class SessionCountCalculator(Calculator):
-    def __init__(self, session_column: str = "session_id"):
-        self.session_column = session_column
-
-    @property
-    def features_size(self) -> int:
-        return 1
-
-    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
-        #print("check if session column exists in events DataFrame")
-        #print(events.columns)
-        if self.session_column not in events.columns or events.empty:
-            return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
-        unique_sessions = events[self.session_column].nunique()
-        return np.array([unique_sessions], dtype=EMBEDDINGS_DTYPE)
     
 class DaysDistributionCalculator(Calculator):
     @property
