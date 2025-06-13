@@ -279,7 +279,36 @@ class SessionCountCalculator(Calculator):
         return np.array([unique_sessions], dtype=EMBEDDINGS_DTYPE)
     
 
+class DaysDistributionCalculator(Calculator):
+    @property
+    def features_size(self) -> int:
+        return 7
 
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        if events.empty or "timestamp" not in events.columns:
+            return np.zeros(7, dtype=EMBEDDINGS_DTYPE)
+
+        weekdays = pd.to_datetime(events["timestamp"]).dt.weekday
+        counts = weekdays.value_counts(normalize=True).sort_index()
+        distribution = np.zeros(7, dtype=EMBEDDINGS_DTYPE)
+        distribution[counts.index.to_numpy()] = counts.to_numpy()
+        return distribution
+
+class MonthDistributionCalculator(Calculator):
+    @property
+    def features_size(self) -> int:
+        return 12  # one column per month (Jan to Dec)
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        distribution = np.zeros(12, dtype=EMBEDDINGS_DTYPE)
+        if events.empty or "timestamp" not in events.columns:
+            return distribution
+
+        months = events["timestamp"].dt.month  # 1 to 12
+        counts = months.value_counts(normalize=True).sort_index()
+        distribution[counts.index.to_numpy() - 1] = counts.to_numpy()  # subtract 1 for zero-based indexing
+
+        return distribution
 
 class CombinedCalculator(Calculator):
     def __init__(self, calculators: List[Calculator]):
