@@ -226,6 +226,12 @@ class UserSequenceDataset(Dataset):
         self.client_groups = self.sequences_df.groupby('client_id')
         self.client_ids = list(self.client_groups.groups.keys())
 
+        sum = 0
+        for client_id in self.client_ids:
+            if not target_df.loc[target_df["client_id"] == client_id].empty:
+                sum += 1
+        print(f"{sum} out of {len(self.client_ids)} = {(sum / len(self.client_ids)):.4f} users churned")
+
         self.target_df = target_df
 
     def __len__(self):
@@ -264,7 +270,8 @@ class UserSequenceDataset(Dataset):
             batch_data['mask'][i] = True
 
         target = np.zeros(1, dtype=np.float32)
-        target[0] = 1 if self.target_df.loc[self.target_df["client_id"] == client_id].empty else 0
+        # 1 = churned (positive), 0 = not churned (negative)
+        target[0] = 0 if self.target_df.loc[self.target_df["client_id"] == client_id].empty else 1
 
         return batch_data, target
 

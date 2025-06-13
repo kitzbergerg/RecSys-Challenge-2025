@@ -34,7 +34,7 @@ class ChurnDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train_data, self.batch_size, num_workers=self.num_workers, shuffle=True)
+        return DataLoader(self.train_data, self.batch_size, num_workers=self.num_workers, shuffle=False)
 
     def val_dataloader(self) -> DataLoader:
         return DataLoader(self.val_data, self.batch_size, num_workers=self.num_workers, shuffle=False)
