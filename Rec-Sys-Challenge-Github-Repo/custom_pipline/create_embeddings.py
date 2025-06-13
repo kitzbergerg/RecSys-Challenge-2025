@@ -11,6 +11,7 @@ from custom_pipline.constants import (
 )
 from data_utils.utils import (
     load_with_properties,
+    join_properties
 )
 from data_utils.data_dir import DataDir
 from custom_pipline.features_aggregator import (
@@ -78,7 +79,9 @@ def create_embeddings(
 
     logger.info("Loading buy events...")
     buy_df = pd.read_parquet(data_dir.data_dir / "product_buy.parquet")
-    #buy_df = load_with_properties(data_dir.data_dir, event_type=EventTypes.PRODUCT_BUY.value)
+    properties_df = pd.read_parquet(data_dir.properties_file)
+    buy_df = join_properties(event_df=buy_df, properties_df=properties_df)
+    #buy_df = load_with_properties(data_dir, event_type=EventTypes.PRODUCT_BUY.value)
     buy_df["timestamp"] = pd.to_datetime(buy_df["timestamp"])
     display(buy_df)
     for event_type in EVENT_TYPE_TO_COLUMNS.keys():
