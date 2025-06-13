@@ -17,7 +17,9 @@ from custom_pipline.calculators import (
     MonthDistributionCalculator,
     DaysDistributionCalculator,
     TimeEventDiffCalculator,
-    PageVisitCalculator
+    PageVisitCalculator,
+    QueryCountCalculator,
+    ProductNameFeaturesCalculator
     )
 from custom_pipline.constants import (
     EventTypes,
@@ -158,6 +160,7 @@ class FeaturesAggregator:
             calculators.append(QueryFeaturesCalculator(
                 query_column=QUERY_COLUMN, single_query=df.iloc[0][QUERY_COLUMN])
             )
+            calculators.append(QueryCountCalculator())
         else:
             max_date = df["timestamp"].max()
             unique_values = get_top_values(df, columns, self.top_n)
@@ -193,10 +196,15 @@ class FeaturesAggregator:
                 #this should only be done for product buy, otherwise category might be in multiple times (since sku is e.g. )
                 calculators.append(DiversityCalculator(column="sku"))
                 calculators.append(DiversityCalculator(column="category"))
+                calculators.append(ProductNameFeaturesCalculator(
+                query_column="name", single_query=df.iloc[0]["name"])
+            )
+
 
             if event_type is EventTypes.PAGE_VISIT:
                 calculators.append(PageVisitCalculator())
             
+
             
 
         return CombinedCalculator(calculators=calculators)

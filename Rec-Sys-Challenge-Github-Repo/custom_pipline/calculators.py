@@ -361,6 +361,52 @@ class PageVisitCalculator(Calculator):
 
         
         return np.array([count, unique_urls, ratio], dtype=EMBEDDINGS_DTYPE)
+    
+class QueryCountCalculator(Calculator):
+    @property
+    def features_size(self) -> int:
+        return 2
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        # check only on unique query in page_visit events
+        count = len(events)
+        if events.empty or "query" not in events.columns:
+            unique_queries = 0.0
+            
+        else:
+            unique_queries = events["query"].nunique()
+        
+        return np.array([count, unique_queries], dtype=EMBEDDINGS_DTYPE)
+
+
+class ProductNameFeaturesCalculator(Calculator):
+    """
+    Calculator class for computing query features for a Product event type referring to the name.
+    The feature vector is the average of all query embeddings from search_query events in user's history.
+    """
+
+    def __init__(self, name_column: str, single_name: str):
+        """
+        Args:
+            name_column (str): Name of column containing quantized text embeddings.
+            single_name (str): A sample string representation of quantized (integer) text embedding vector.
+        """
+        self.name_column = name_column
+        self.name_size = len(parse_to_array(single_name))
+
+    @property
+    def features_size(self) -> int:
+        return self.name_size
+
+    def compute_features(self, events: pd.DataFrame) -> np.ndarray:
+        quantized_name_representations = np.stack(
+            [
+                parse_to_array(string_representation_of_vector=v)
+                for v in events[self.name_column].values
+            ],
+            axis=0,
+        )
+        return quantized_name_representations.mean(axis=0)
 
 
 class CombinedCalculator(Calculator):
