@@ -311,7 +311,7 @@ class TimeEventDiffCalculator(Calculator):
             return np.zeros(self.features_size, dtype=EMBEDDINGS_DTYPE)
 
         times = events["timestamp"].sort_values()
-        deltas = times.diff().dropna().dt.total_seconds()
+        deltas = times.diff().dropna().dt.total_seconds()/3600
         if deltas.empty:
             return np.zeros(self.features_size, dtype=EMBEDDINGS_DTYPE)
 
