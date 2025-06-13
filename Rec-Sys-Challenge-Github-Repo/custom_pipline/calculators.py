@@ -277,6 +277,8 @@ class SessionCountCalculator(Calculator):
             return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
         unique_sessions = events[self.session_column].nunique()
         return np.array([unique_sessions], dtype=EMBEDDINGS_DTYPE)
+    
+
 
 
 class CombinedCalculator(Calculator):

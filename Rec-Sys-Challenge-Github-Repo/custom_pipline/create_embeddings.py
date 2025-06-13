@@ -4,6 +4,7 @@ from typing import List, Tuple
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from IPython.display import display
 
 from custom_pipline.constants import (
     EVENT_TYPE_TO_COLUMNS, EventTypes,
@@ -76,14 +77,16 @@ def create_embeddings(
     product_properties = pd.read_parquet(data_dir.data_dir / "product_properties.parquet")
 
     logger.info("Loading buy events...")
-    buy_df = pd.read_parquet(data_dir.data_dir / "product_buy.parquet")
+    #buy_df = pd.read_parquet(data_dir.data_dir / "product_buy.parquet")
+    buy_df = load_with_properties(data_dir.data_dir, event_type=EventTypes.PRODUCT_BUY.value)
     buy_df["timestamp"] = pd.to_datetime(buy_df["timestamp"])
-
+    display(buy_df
     for event_type in EVENT_TYPE_TO_COLUMNS.keys():
         logger.info("Generating features for %s event type", event_type.value)
         logger.info("Loading data...")
         event_df = load_with_properties(data_dir=data_dir, event_type=event_type.value)
         event_df["timestamp"] = pd.to_datetime(event_df.timestamp)
+        display(event_df)
         logger.info("Generating features...")
         aggregator.generate_features(
             event_type=event_type,
@@ -118,7 +121,7 @@ def get_parser() -> argparse.ArgumentParser:
         nargs="*",
         type=int,
         default=[1, 7, 30],
-        help="Numer of days to compute features",
+        help="Number of days to compute features",
     )
     parser.add_argument(
         "--top-n",
