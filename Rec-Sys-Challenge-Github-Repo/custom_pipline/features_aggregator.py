@@ -173,7 +173,7 @@ class FeaturesAggregator:
 
             calculators.append(RecencyCalculator(max_date=max_date))
 
-            calculators.append(SessionCountCalculator(session_column="session_id"))
+            #calculators.append(SessionCountCalculator(session_column="session_id"))
 
             if "timestamp" in df.columns:
                 calculators.append(InteractionDurationCalculator())

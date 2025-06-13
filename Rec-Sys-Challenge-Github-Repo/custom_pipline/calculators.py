@@ -278,8 +278,8 @@ class SessionCountCalculator(Calculator):
         return 1
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
-        print("check if session column exists in events DataFrame")
-        print(events.columns)
+        #print("check if session column exists in events DataFrame")
+        #print(events.columns)
         if self.session_column not in events.columns or events.empty:
             return np.array([0.0], dtype=EMBEDDINGS_DTYPE)
         unique_sessions = events[self.session_column].nunique()
