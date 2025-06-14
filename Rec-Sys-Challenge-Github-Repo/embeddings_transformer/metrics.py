@@ -18,17 +18,21 @@ class MultiTaskLoss:
     def __init__(self, task_weights: Optional[Dict[str, float]] = None):
         # Default weights - you can adjust these based on task importance
         self.task_weights = task_weights or {
-            'event_type': 1.0,
+            'event_type': 0.7,  # Easiest, so lower weight
+            'price': 1.0,
             'category': 2.0,  # Higher weight because it's harder
-            'url': 2.0  # Higher weight because it's event harder than category, but also not as important
+            'url': 2.0,  # Higher weight because it's event harder than category, but also not as important
+            'time': 1.5  # Important since we want to learn temporal information
         }
 
         # Use separate loss functions for each task
         self.loss_fns = {
             # TODO: figure out class balance, weighting?
             'event_type': nn.CrossEntropyLoss(ignore_index=-1),
+            'price': nn.CrossEntropyLoss(ignore_index=-1),
             'category': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1),
             'url': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.2),
+            'time': nn.MSELoss(),
         }
 
     def compute_loss(self, predictions: Dict[str, torch.Tensor], batch) -> Dict[str, torch.Tensor]:
@@ -51,12 +55,27 @@ class MultiTaskLoss:
             losses['category'] = category_loss
             total_loss += self.task_weights['category'] * category_loss
 
+        # Price loss
+        valid_indices = batch['price_mask']
+        if valid_indices.sum() > 0:
+            price_loss = self.loss_fns['price'](predictions['price'][valid_indices],
+                                                batch['price_targets'][valid_indices])
+            losses['price'] = price_loss
+            total_loss += self.task_weights['price'] * price_loss
+
         # URL loss
         valid_indices = batch['url_mask']
         if valid_indices.sum() > 0:
             url_loss = self.loss_fns['url'](predictions['url'][valid_indices], batch['url_targets'][valid_indices])
             losses['url'] = url_loss
             total_loss += self.task_weights['url'] * url_loss
+
+        # Time loss
+        valid_indices = batch['time_mask']
+        if valid_indices.sum() > 0:
+            time_loss = self.loss_fns['time'](predictions['time'][valid_indices], batch['time_targets'][valid_indices])
+            losses['time'] = time_loss
+            total_loss += self.task_weights['time'] * time_loss
 
         losses['total'] = total_loss
         return losses

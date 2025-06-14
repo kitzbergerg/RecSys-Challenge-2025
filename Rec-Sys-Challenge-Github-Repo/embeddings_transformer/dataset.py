@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any
+import math
 
 import numpy as np
 import pandas as pd
@@ -36,7 +35,6 @@ class UserSequenceDataset(Dataset):
             group = group.iloc[-self.max_seq_length:]
 
         # Initialize tensors
-        # TODO: add time delta
         sequence = {
             'client_id': client_id,
             'event_type': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
@@ -45,6 +43,7 @@ class UserSequenceDataset(Dataset):
             'url': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'product_name': torch.zeros(MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM, dtype=torch.float32),
             'search_query': torch.zeros(MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM, dtype=torch.float32),
+            'time_since_last_event': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.float32),
             'mask': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.bool),  # True for valid positions
             'seq_len': len(group),
         }
@@ -58,6 +57,10 @@ class UserSequenceDataset(Dataset):
             sequence['search_query'][i] = torch.from_numpy(event['search_query'])
             sequence['mask'][i] = True
 
+            if i > 0:
+                time_delta = group.iloc[i]['timestamp'] - group.iloc[i - 1]['timestamp']
+                sequence['time_since_last_event'][i] = max(time_delta.seconds, 1)
+
         # Choose a random position to mask
         mask_pos = random.randint(0, len(group) - 1)
 
@@ -66,8 +69,12 @@ class UserSequenceDataset(Dataset):
             'event_type_mask': False,
             'category_targets': -1,
             'category_mask': False,
+            'price_targets': -1,
+            'price_mask': False,
             'url_targets': -1,
             'url_mask': False,
+            'time_targets': -1,
+            'time_mask': False,
         }
 
         # Mask event type
@@ -76,17 +83,30 @@ class UserSequenceDataset(Dataset):
         targets['event_type_mask'] = True
         sequence['event_type'][mask_pos] = 2
 
-        if original_event_type in [3, 4, 5] and random.random() < 0.5:
+        if original_event_type in [3, 4, 5] and random.random() < 0.3:
             # For product events, we can also predict category
             targets['category_targets'] = sequence['category'][mask_pos].item()
             targets['category_mask'] = True
             sequence['category'][mask_pos] = 2
+
+        if original_event_type in [3, 4, 5] and random.random() < 0.3:
+            # For product events, we can also predict price
+            targets['price_targets'] = sequence['price'][mask_pos].item()
+            targets['price_mask'] = True
+            sequence['price'][mask_pos] = 2
 
         if original_event_type == 6 and random.random() < 0.2:
             # For page visits, we can predict URL
             targets['url_targets'] = sequence['url'][mask_pos].item()
             targets['url_mask'] = True
             sequence['url'][mask_pos] = 2
+
+        # TODO: add extra input to model to signal prediction
+        if mask_pos != 0 and random.random() < 0.7:
+            # As long as there is more than 1 event we can try to predict the time delta
+            targets['time_targets'] = math.log(sequence['time_since_last_event'][mask_pos].item())
+            targets['time_mask'] = True
+            sequence['time_since_last_event'][mask_pos] = -1  # not categorical and 0 is for padding
 
         # TODO: add other tasks more aligned with goal e.g.
         #  - time till next purchase

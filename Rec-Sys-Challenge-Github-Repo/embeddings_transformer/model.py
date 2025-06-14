@@ -50,10 +50,15 @@ class UserBehaviorTransformer(nn.Module):
             'search_query': nn.Linear(TEXT_EMB_DIM, embedding_dim)
         })
 
+        self.time_encoder = TimeIntervalEncoder(
+            max_interval_seconds=30 * 24 * 3600,  # 30 days max
+            embedding_dim=embedding_dim
+        )
+
         self.position_embedding = nn.Embedding(max_seq_length, embedding_dim)
 
         # Combine all feature embeddings
-        self.feature_combiner = nn.Linear(embedding_dim * 6, embedding_dim)
+        self.feature_combiner = nn.Linear(embedding_dim * 7, embedding_dim)
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=embedding_dim,
@@ -82,6 +87,12 @@ class UserBehaviorTransformer(nn.Module):
                 nn.Dropout(dropout),
                 nn.Linear(512, vocab_sizes['event_type'])
             ),
+            'price': nn.Sequential(
+                nn.Linear(output_dim, 512),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(512, vocab_sizes['price'])
+            ),
             'category': nn.Sequential(
                 nn.Linear(output_dim, 512),
                 nn.GELU(),
@@ -93,6 +104,12 @@ class UserBehaviorTransformer(nn.Module):
                 nn.GELU(),
                 nn.Dropout(dropout),
                 nn.Linear(512, vocab_sizes['url'])
+            ),
+            'time': nn.Sequential(
+                nn.Linear(output_dim, 512),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(512, 1)
             )
             # TODO: text embeddings
         })
@@ -107,6 +124,8 @@ class UserBehaviorTransformer(nn.Module):
         embeddings = [self.embeddings[key](batch[key]) for key in self.embeddings]
         # Project fixed-size vectors
         embeddings += [self.projectors[key](batch[key]) for key in self.projectors]
+        # Add time interval encoding
+        embeddings.append(self.time_encoder(batch['time_since_last_event']))
         # Concatenate along last dim
         return torch.cat(embeddings, dim=-1)
 
@@ -139,10 +158,94 @@ class UserBehaviorTransformer(nn.Module):
             # Generate predictions for all tasks
             predictions = {}
             for task_name, head in self.heads.items():
-                predictions[task_name] = head(embedding)
+                prediction = head(embedding)
+                if task_name == 'time':
+                    prediction = prediction.squeeze(-1)
+                predictions[task_name] = prediction
             return embedding, predictions
 
         return embedding
+
+
+class TimeIntervalEncoder(nn.Module):
+    """Encodes time intervals using multiple complementary approaches"""
+
+    def __init__(self, max_interval_seconds: int, embedding_dim: int):
+        super().__init__()
+        self.max_interval_seconds = max_interval_seconds
+
+        # Strategy 1: Logarithmic bucketing for wide range handling
+        self.log_buckets = nn.Embedding(50, embedding_dim // 4)
+
+        # Strategy 2: Periodic encoding for capturing daily/weekly patterns
+        self.periodic_encoder = nn.Linear(4, embedding_dim // 4)  # sin/cos for day/week
+
+        # Strategy 3: Direct encoding for fine-grained timing
+        self.direct_encoder = nn.Linear(1, embedding_dim // 4)
+
+        # Strategy 4: Categorical bucketing for common intervals
+        self.categorical_buckets = nn.Embedding(20, embedding_dim // 4)
+
+        # Combine all time representations
+        self.combiner = nn.Linear(embedding_dim, embedding_dim)
+
+    def forward(self, time_intervals: torch.Tensor) -> torch.Tensor:
+        # Handle padding (where time_interval is 0)
+        mask = time_intervals > 0
+        safe_intervals = torch.where(mask, time_intervals, torch.ones_like(time_intervals))
+
+        # TODO: get statistics on time for better defaults
+
+        # Strategy 1: Logarithmic bucketing
+        # This handles the wide range from seconds to months
+        log_values = torch.log(safe_intervals.float() + 1)  # +1 to avoid log(0)
+        log_bucket_ids = torch.clamp(
+            (log_values * 5).long(),  # Scale factor to spread across buckets
+            0, 49
+        )
+        log_features = self.log_buckets(log_bucket_ids)
+
+        # Strategy 2: Periodic encoding for daily/weekly patterns
+        seconds = safe_intervals.float()
+        day_seconds = 24 * 3600
+        week_seconds = 7 * day_seconds
+        periodic_features = torch.stack([
+            torch.sin(2 * torch.pi * seconds / day_seconds),  # Daily pattern
+            torch.cos(2 * torch.pi * seconds / day_seconds),
+            torch.sin(2 * torch.pi * seconds / week_seconds),  # Weekly pattern
+            torch.cos(2 * torch.pi * seconds / week_seconds)
+        ], dim=-1)
+        periodic_features = self.periodic_encoder(periodic_features)
+
+        # Strategy 3: Direct normalized encoding
+        normalized_time = torch.clamp(safe_intervals.float() / self.max_interval_seconds, 0, 1).unsqueeze(-1)
+        direct_features = self.direct_encoder(normalized_time)
+
+        # Strategy 4: Categorical bucketing for common intervals
+        # Define meaningful time buckets (in seconds)
+        bucket_boundaries = torch.tensor([
+            0, 60, 300, 900, 1800, 3600,  # 1min, 5min, 15min, 30min, 1hour
+            7200, 14400, 28800, 86400,  # 2h, 4h, 8h, 1day
+            172800, 259200, 604800,  # 2days, 3days, 1week
+            1209600, 2592000, 7776000,  # 2weeks, 1month, 3months
+            15552000, 31536000  # 6months, 1year
+        ], device=time_intervals.device)
+
+        # Find which bucket each interval belongs to
+        bucket_ids = torch.searchsorted(bucket_boundaries, safe_intervals.float())
+        bucket_ids = torch.clamp(bucket_ids, 0, 19)
+        categorical_features = self.categorical_buckets(bucket_ids)
+
+        # Combine all strategies
+        combined = torch.cat([
+            log_features, periodic_features,
+            direct_features, categorical_features
+        ], dim=-1)
+
+        # Apply mask to zero out padding positions
+        combined = combined * mask.unsqueeze(-1).float()
+
+        return self.combiner(combined)
 
 
 class TransformerModel(pl.LightningModule):
@@ -160,7 +263,9 @@ class TransformerModel(pl.LightningModule):
         self.validation_metrics = {
             'event_type': [],
             'category': [],
-            'url': []
+            'url': [],
+            'price': [],
+            'time': []
         }
         self.metric_calculator = {
             'event_type': MultiClassMetricCalculator(vocab_sizes['event_type']),
@@ -171,10 +276,8 @@ class TransformerModel(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.5)
         return {
             'optimizer': optimizer,
-            'lr_scheduler': scheduler,
             'monitor': 'val_loss'
         }
 
@@ -228,6 +331,13 @@ class TransformerModel(pl.LightningModule):
             cat_acc = (cat_preds == y['category_targets'][valid_indices]).float().mean()
             accuracies['category'] = cat_acc
 
+        # Price accuracy
+        valid_indices = y['price_mask']
+        if valid_indices.sum() > 0:
+            price_preds = torch.argmax(predictions['price'][valid_indices], dim=1)
+            price_acc = (price_preds == y['price_targets'][valid_indices]).float().mean()
+            accuracies['price'] = price_acc
+
         # URL accuracy
         valid_indices = y['url_mask']
         if valid_indices.sum() > 0:
@@ -239,6 +349,7 @@ class TransformerModel(pl.LightningModule):
         self.log('val_loss', losses['total'], prog_bar=True, logger=True)
         for task_name, acc in accuracies.items():
             self.log(f'val_{task_name}_acc', acc, prog_bar=True, logger=True)
+        self.log('val_time_loss', losses['time'], prog_bar=True, logger=True)
 
         return losses['total']
 
@@ -271,7 +382,7 @@ def train_transformer_model(
 
     dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1])
 
-    data = DataModule(dataset_train, dataset_valid, 64, 4)
+    data = DataModule(dataset_train, dataset_valid, 32, 8)
 
     model = TransformerModel(
         vocab_sizes=vocab_sizes,
@@ -281,7 +392,8 @@ def train_transformer_model(
     trainer = pl.Trainer(
         accelerator="gpu",
         max_epochs=100,
-        overfit_batches=500,
+        check_val_every_n_epoch=3,
+        #overfit_batches=500,
         callbacks=[
             RichProgressBar(leave=True),
             ModelCheckpoint(monitor="event_type_val_auroc", mode="max", save_top_k=1)
