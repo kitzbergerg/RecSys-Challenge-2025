@@ -425,6 +425,10 @@ class CombinedCalculator(Calculator):
         return sum(calc.features_size for calc in self._calculators)
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
-        return np.concatenate(
-            [calc.compute_features(events) for calc in self._calculators], axis=0
-        )
+        features_list = []
+        for calc in self._calculators:
+            result = calc.compute_features(events)
+            if np.isnan(result).any():
+                print(f"NaN detected in calculator: {type(calc).__name__}")
+            features_list.append(result)
+        return np.concatenate(features_list, axis=0)
