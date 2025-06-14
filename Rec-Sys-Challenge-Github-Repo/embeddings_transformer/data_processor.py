@@ -1,14 +1,13 @@
-import random
-
 import pandas as pd
 import numpy as np
-import torch
-from torch.utils.data import Dataset
 from typing import Dict, List, Tuple
 from pathlib import Path
 import pickle
 from collections import defaultdict
 import re
+
+from embeddings_transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
+from embeddings_transformer.dataset import UserSequenceDataset
 
 
 class EventSequenceProcessor:
@@ -19,11 +18,11 @@ class EventSequenceProcessor:
 
     def __init__(
             self,
-            max_seq_length: int = 256,
-            max_url_vocab: int = 50000,  # Limit URL vocabulary to manageable size
+            max_seq_length: int = MAX_SEQUENCE_LENGTH,
+            max_url_vocab: int = 50000,
             max_category_vocab: int = 10000,
-            min_url_count: int = 5,  # Only include URLs that appear at least 5 times
-            min_category_count: int = 2
+            min_url_count: int = 500,
+            min_category_count: int = 3
     ):
         self.max_seq_length = max_seq_length
         self.max_url_vocab = max_url_vocab
@@ -31,24 +30,42 @@ class EventSequenceProcessor:
         self.min_url_count = min_url_count
         self.min_category_count = min_category_count
 
-        # Event type mapping
-        self.event_types = {
-            'product_buy': 1,
-            'add_to_cart': 2,
-            'remove_from_cart': 3,
-            'page_visit': 4,
-            'search_query': 5
-        }
-
         # Special tokens
         self.PAD_TOKEN = 0
         self.UNK_TOKEN = 1
         self.MASK_TOKEN = 2
 
+        # Event type mapping
+        self.event_types = {
+            # special tokens
+            'PAD_TOKEN': self.PAD_TOKEN,
+            'UNK_TOKEN': self.UNK_TOKEN,
+            'MASK_TOKEN': self.MASK_TOKEN,
+
+            'product_buy': 3,
+            'add_to_cart': 4,
+            'remove_from_cart': 5,
+            'page_visit': 6,
+            'search_query': 7
+        }
+
         # Vocabularies (will be built from data)
-        self.url_vocab = {}
-        self.category_vocab = {}
-        self.price_vocab = {}
+        # store special tokens as negative numbers as they will never appear in data
+        self.url_vocab = {
+            -1: self.PAD_TOKEN,
+            -2: self.UNK_TOKEN,
+            -3: self.MASK_TOKEN,
+        }
+        self.category_vocab = {
+            -1: self.PAD_TOKEN,
+            -2: self.UNK_TOKEN,
+            -3: self.MASK_TOKEN,
+        }
+        self.price_vocab = {
+            -1: self.PAD_TOKEN,
+            -2: self.UNK_TOKEN,
+            -3: self.MASK_TOKEN,
+        }
         self.vocab_built = False
 
     def parse_embedding_string(self, emb_str: str) -> np.ndarray:
@@ -58,7 +75,7 @@ class EventSequenceProcessor:
         else:
             emb_array = np.array(emb_str, dtype=np.float32)
 
-        assert len(emb_array) == 16
+        assert len(emb_array) == TEXT_EMB_DIM
         return emb_array
 
     def build_vocabularies(self, data_dir: Path):
@@ -71,8 +88,9 @@ class EventSequenceProcessor:
         url_counts = page_visits['url'].value_counts()
         # Keep only URLs that appear frequently enough
         frequent_urls = url_counts[url_counts >= self.min_url_count]
-        top_urls = frequent_urls.head(self.max_url_vocab - 3)  # Reserve space for special tokens
-        self.url_vocab = {url: idx + 3 for idx, url in enumerate(top_urls.index)}
+        assert len(frequent_urls) < self.max_url_vocab
+        top_urls = frequent_urls.head(self.max_url_vocab - 3)
+        self.url_vocab.update({url: idx + 3 for idx, url in enumerate(top_urls.index)})
         print(f"Built URL vocabulary with {len(self.url_vocab)} entries")
 
         # Category/Price vocabulary from product events
@@ -89,16 +107,16 @@ class EventSequenceProcessor:
                 category_counts[category[0]] += category[1]
 
         # Build category vocabulary
-        frequent_categories = {cat: count for cat, count in category_counts.items()
-                               if count >= self.min_category_count}
+        frequent_categories = {cat: count for cat, count in category_counts.items() if count >= self.min_category_count}
+        assert len(frequent_categories) < self.max_category_vocab
         sorted_categories = sorted(frequent_categories.items(), key=lambda x: x[1], reverse=True)
         top_categories = sorted_categories[:self.max_category_vocab - 3]
 
-        self.category_vocab = {cat: idx + 3 for idx, (cat, _) in enumerate(top_categories)}
+        self.category_vocab.update({cat: idx + 3 for idx, (cat, _) in enumerate(top_categories)})
         print(f"Built category vocabulary with {len(self.category_vocab)} entries")
 
         # Price vocabulary (simpler - just use the price buckets directly)
-        self.price_vocab = {bucket: bucket + 3 for bucket in range(100)}
+        self.price_vocab.update({bucket: bucket + 3 for bucket in range(100)})
         print(f"Built price vocabulary with {len(self.price_vocab)} entries")
 
         self.vocab_built = True
@@ -131,7 +149,7 @@ class EventSequenceProcessor:
             raise ValueError("Vocabularies not built yet!")
 
         return {
-            'event_type': len(self.event_types) + 1,  # +1 for padding
+            'event_type': len(self.event_types),
             'url': len(self.url_vocab),
             'category': len(self.category_vocab),
             'price': len(self.price_vocab)
@@ -154,7 +172,7 @@ class EventSequenceProcessor:
             df['category'] = self.UNK_TOKEN
             df['price'] = self.UNK_TOKEN
 
-        zero_embed = np.zeros(16, dtype=np.float32)
+        zero_embed = np.zeros(TEXT_EMB_DIM, dtype=np.float32)
         if event_type in ['product_buy', 'add_to_cart', 'remove_from_cart']:
             df['product_name'] = df['name'].apply(lambda s: self.parse_embedding_string(s) if s else zero_embed)
         else:
@@ -182,7 +200,6 @@ class EventSequenceProcessor:
         }
 
         dfs = []
-
         for event_type, filename in event_files.items():
             print(f"Processing {event_type} events...")
             file_path = data_dir / filename
@@ -212,70 +229,13 @@ class EventSequenceProcessor:
         return df
 
 
-class UserSequenceDataset(Dataset):
-    """Dataset for user event sequences."""
-
-    def __init__(self, sequences_df: pd.DataFrame, active_clients: np.ndarray, max_seq_length: int = 256):
-        self.max_seq_length = max_seq_length
-
-        # Filter to active clients
-        self.sequences_df = sequences_df[sequences_df['client_id'].isin(active_clients)].copy()
-
-        # Group by client_id and pre-store list of client_ids
-        self.client_groups = self.sequences_df.groupby('client_id')
-        self.client_ids = list(self.client_groups.groups.keys())
-
-    def __len__(self):
-        return len(self.client_ids)
-
-    def __getitem__(self, idx):
-        client_id = self.client_ids[idx]
-        group = self.client_groups.get_group(client_id).sort_values('timestamp')
-
-        seq_len = len(group)
-
-        # Truncate if too long
-        if len(group) > self.max_seq_length:
-            group = group.iloc[-self.max_seq_length:]
-
-        # Initialize tensors
-        batch_data = {
-            'client_id': client_id,
-            'event_type': torch.zeros(self.max_seq_length, dtype=torch.long),
-            'category': torch.zeros(self.max_seq_length, dtype=torch.long),
-            'price': torch.zeros(self.max_seq_length, dtype=torch.long),
-            'url': torch.zeros(self.max_seq_length, dtype=torch.long),
-            'product_name': torch.zeros(self.max_seq_length, 16, dtype=torch.float32),
-            'search_query': torch.zeros(self.max_seq_length, 16, dtype=torch.float32),
-            'mask': torch.zeros(self.max_seq_length, dtype=torch.bool),  # True for valid positions
-            'seq_len': seq_len
-        }
-
-        for i, (_, event) in enumerate(group.iterrows()):
-            batch_data['event_type'][i] = event['event_type']
-            batch_data['category'][i] = event['category']
-            batch_data['price'][i] = event['price']
-            batch_data['url'][i] = event['url']
-            batch_data['product_name'][i] = torch.from_numpy(event['product_name'])
-            batch_data['search_query'][i] = torch.from_numpy(event['search_query'])
-            batch_data['mask'][i] = True
-
-        mask_pos = random.randint(0, len(group) - 1)
-        target_event_type = group.iloc[mask_pos]['event_type']
-        # 2 is MASK token
-        batch_data['event_type'][mask_pos] = 2
-
-        # -1 because we ignore PAD token for pred
-        return batch_data, target_event_type - 1
-
-
 def create_data_processing_pipeline(
         data_dir: Path,
         relevant_clients: np.ndarray,
         vocab_path: Path,
         sequences_path: Path,
         rebuild_vocab: bool = False,
-        max_seq_length: int = 256
+        max_seq_length: int = MAX_SEQUENCE_LENGTH
 ) -> Tuple[UserSequenceDataset, Dict[str, int]]:
     """
     Complete data processing pipeline.
@@ -308,7 +268,7 @@ def create_data_processing_pipeline(
         sequences = pd.read_pickle(sequences_path)
 
     # Create dataset
-    active_clients = np.load(data_dir / ".." / "original" / "target" / "active_clients.npy")
+    active_clients = np.load(data_dir / "target" / "active_clients.npy")
     dataset = UserSequenceDataset(sequences, active_clients, max_seq_length)
     vocab_sizes = processor.get_vocab_sizes()
 
@@ -322,7 +282,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
-    parser.add_argument("--max-seq-length", type=int, default=256)
+    parser.add_argument("--max-seq-length", type=int, default=MAX_SEQUENCE_LENGTH)
     parser.add_argument("--rebuild-vocab", action="store_true")
 
     args = parser.parse_args()
@@ -335,7 +295,7 @@ if __name__ == "__main__":
     relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
 
     # Process data
-    dataset_train, dataset_val, vocab_sizes = create_data_processing_pipeline(
+    dataset, vocab_sizes = create_data_processing_pipeline(
         data_dir=data_dir,
         relevant_clients=relevant_clients,
         vocab_path=output_dir / "vocabularies.pkl",
@@ -344,5 +304,5 @@ if __name__ == "__main__":
         max_seq_length=args.max_seq_length
     )
 
-    print(f"Dataset created with {len(dataset_train)} sequences")
+    print(f"Dataset created with {len(dataset)} sequences")
     print(f"Vocabulary sizes: {vocab_sizes}")

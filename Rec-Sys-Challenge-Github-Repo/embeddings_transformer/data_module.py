@@ -5,21 +5,13 @@ import logging
 from torch.utils.data import DataLoader
 
 from embeddings_transformer.data_processor import UserSequenceDataset
-from training_pipeline.dataset import (
-    BehavioralDataset,
-)
-from training_pipeline.target_data import (
-    TargetData,
-)
-from training_pipeline.target_calculators import (
-    TargetCalculator,
-)
+from embeddings_transformer.dataset import collate_fn
 
 logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.INFO)
 
 
-class ChurnDataModule(pl.LightningDataModule):
+class DataModule(pl.LightningDataModule):
 
     def __init__(
             self,
@@ -34,7 +26,9 @@ class ChurnDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train_data, self.batch_size, num_workers=self.num_workers, shuffle=False)
+        return DataLoader(self.train_data, self.batch_size, num_workers=self.num_workers, shuffle=False,
+                          collate_fn=collate_fn)
 
     def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.val_data, self.batch_size, num_workers=self.num_workers, shuffle=False)
+        return DataLoader(self.val_data, self.batch_size, num_workers=self.num_workers, shuffle=False,
+                          collate_fn=collate_fn)
