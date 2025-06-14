@@ -42,7 +42,7 @@ EVENT_TYPE_TO_FILENAME = {
     EventTypes.PRODUCT_BUY: "product_buy.parquet",
     EventTypes.ADD_TO_CART: "add_to_cart.parquet",
     EventTypes.SEARCH_QUERY: "search_query.parquet",
-    # EventTypes.PAGE_VISIT: "page_visit.parquet", #ran without for debugging
+    EventTypes.PAGE_VISIT: "page_visit.parquet", #ran without for debugging
 }
 
 
@@ -50,7 +50,7 @@ EVENT_TYPE_TO_COLUMNS = {
     EventTypes.PRODUCT_BUY: ['sku', 'category'],
     EventTypes.ADD_TO_CART: ['sku', 'category'],
     EventTypes.SEARCH_QUERY: [QUERY_COLUMN], # QUERY_COLUMN is likely 'query'
-    # EventTypes.PAGE_VISIT: ['url'],
+    EventTypes.PAGE_VISIT: ['url'],
 }
 
 
