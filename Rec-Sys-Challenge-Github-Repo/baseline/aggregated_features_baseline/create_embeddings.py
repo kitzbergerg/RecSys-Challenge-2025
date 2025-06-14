@@ -4,6 +4,8 @@ from typing import List, Tuple
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from IPython.display import display
+
 
 from baseline.aggregated_features_baseline.constants import (
     EVENT_TYPE_TO_COLUMNS,
@@ -75,6 +77,7 @@ def create_embeddings(
         logger.info("Generating features for %s event type", event_type.value)
         logger.info("Loading data...")
         event_df = load_with_properties(data_dir=data_dir, event_type=event_type.value)
+        display(event_df)
         event_df["timestamp"] = pd.to_datetime(event_df.timestamp)
         logger.info("Generating features...")
         aggregator.generate_features(
