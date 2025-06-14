@@ -1,7 +1,6 @@
 # contrastive_embeddings/constants.py
 
 from enum import Enum
-from typing import Dict, List
 
 class EventTypes(str, Enum):
     PRODUCT_BUY = "product_buy"
@@ -11,11 +10,33 @@ class EventTypes(str, Enum):
     PAGE_VISIT = "page_visit"
 
 EVENT_TYPE_TO_COLUMNS = {
-    EventTypes.PRODUCT_BUY: ["sku", "category", "price"],
-    EventTypes.ADD_TO_CART: ["sku", "category", "price"],
-    EventTypes.REMOVE_FROM_CART: ["sku", "category", "price"],
+    EventTypes.PRODUCT_BUY: ["sku"],
+    EventTypes.ADD_TO_CART: ["sku"],
+    EventTypes.REMOVE_FROM_CART: ["sku"],
     EventTypes.PAGE_VISIT: ["url"],
-    EventTypes.SEARCH_QUERY: [],
+    EventTypes.SEARCH_QUERY: ["query"],
 }
 
 SESSION_GAP_SECONDS = 1800  # 30 minutes
+
+
+
+# from enum import Enum
+# from typing import Dict, List
+
+# class EventTypes(str, Enum):
+#     PRODUCT_BUY = "product_buy"
+#     SEARCH_QUERY = "search_query"
+#     ADD_TO_CART = "add_to_cart"
+#     REMOVE_FROM_CART = "remove_from_cart"
+#     PAGE_VISIT = "page_visit"
+
+# EVENT_TYPE_TO_COLUMNS = {
+#     EventTypes.PRODUCT_BUY: ["sku", "category", "price"],
+#     EventTypes.ADD_TO_CART: ["sku", "category", "price"],
+#     EventTypes.REMOVE_FROM_CART: ["sku", "category", "price"],
+#     EventTypes.PAGE_VISIT: ["url"],
+#     EventTypes.SEARCH_QUERY: [],
+# }
+
+# SESSION_GAP_SECONDS = 1800  # 30 minutes
