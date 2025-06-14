@@ -205,7 +205,7 @@ class PriceStatsCalculator(Calculator):
         if prices.empty:
             return np.zeros(4, dtype=EMBEDDINGS_DTYPE)
         
-
+        print(f"{prices.mean()=}, {prices.min()=}, {prices.max()=}, {prices.std()=}")
         return np.array([
             prices.mean(),
             prices.min(),
