@@ -420,7 +420,8 @@ class CombinedCalculator(Calculator):
 
     @property
     def features_size(self) -> int:
-        print(f"Calculator: {type(calc).__name__} + feature_size: {calc.features_size}" for calc in self._calculators)
+        for calc in self._calculators:
+            print(f"Calculator: {type(calc).__name__} + feature_size: {calc.features_size}")
         return sum(calc.features_size for calc in self._calculators)
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
