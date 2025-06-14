@@ -1,3 +1,5 @@
+import random
+
 import pandas as pd
 import numpy as np
 import torch
@@ -7,8 +9,6 @@ from pathlib import Path
 import pickle
 from collections import defaultdict
 import re
-
-from training_pipeline.target_data import TargetData
 
 
 class EventSequenceProcessor:
@@ -215,8 +215,7 @@ class EventSequenceProcessor:
 class UserSequenceDataset(Dataset):
     """Dataset for user event sequences."""
 
-    def __init__(self, sequences_df: pd.DataFrame, active_clients: np.ndarray, target_df: pd.DataFrame,
-                 max_seq_length: int = 256):
+    def __init__(self, sequences_df: pd.DataFrame, active_clients: np.ndarray, max_seq_length: int = 256):
         self.max_seq_length = max_seq_length
 
         # Filter to active clients
@@ -225,14 +224,6 @@ class UserSequenceDataset(Dataset):
         # Group by client_id and pre-store list of client_ids
         self.client_groups = self.sequences_df.groupby('client_id')
         self.client_ids = list(self.client_groups.groups.keys())
-
-        sum = 0
-        for client_id in self.client_ids:
-            if not target_df.loc[target_df["client_id"] == client_id].empty:
-                sum += 1
-        print(f"{sum} out of {len(self.client_ids)} = {(sum / len(self.client_ids)):.4f} users churned")
-
-        self.target_df = target_df
 
     def __len__(self):
         return len(self.client_ids)
@@ -269,11 +260,13 @@ class UserSequenceDataset(Dataset):
             batch_data['search_query'][i] = torch.from_numpy(event['search_query'])
             batch_data['mask'][i] = True
 
-        target = np.zeros(1, dtype=np.float32)
-        # 1 = churned (positive), 0 = not churned (negative)
-        target[0] = 0 if self.target_df.loc[self.target_df["client_id"] == client_id].empty else 1
+        mask_pos = random.randint(0, len(group) - 1)
+        target_event_type = group.iloc[mask_pos]['event_type']
+        # 2 is MASK token
+        batch_data['event_type'][mask_pos] = 2
 
-        return batch_data, target
+        # -1 because we ignore PAD token for pred
+        return batch_data, target_event_type - 1
 
 
 def create_data_processing_pipeline(
@@ -283,7 +276,7 @@ def create_data_processing_pipeline(
         sequences_path: Path,
         rebuild_vocab: bool = False,
         max_seq_length: int = 256
-) -> Tuple[UserSequenceDataset, UserSequenceDataset, Dict[str, int]]:
+) -> Tuple[UserSequenceDataset, Dict[str, int]]:
     """
     Complete data processing pipeline.
 
@@ -316,12 +309,10 @@ def create_data_processing_pipeline(
 
     # Create dataset
     active_clients = np.load(data_dir / ".." / "original" / "target" / "active_clients.npy")
-    target_data = TargetData.read_from_dir(data_dir / ".." / "original" / "target")
-    dataset_train = UserSequenceDataset(sequences, active_clients, target_data.train_df, max_seq_length)
-    dataset_valid = UserSequenceDataset(sequences, active_clients, target_data.validation_df, max_seq_length)
+    dataset = UserSequenceDataset(sequences, active_clients, max_seq_length)
     vocab_sizes = processor.get_vocab_sizes()
 
-    return dataset_train, dataset_valid, vocab_sizes
+    return dataset, vocab_sizes
 
 
 # Example usage script

@@ -7,14 +7,12 @@ import numpy as np
 from typing import Dict, Callable, List
 from pathlib import Path
 from pytorch_lightning.callbacks import RichProgressBar
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
-from data_utils.data_dir import DataDir
+from pytorch_lightning.callbacks import ModelCheckpoint
 from embeddings_transformer.data_module import ChurnDataModule
 from embeddings_transformer.data_processor import create_data_processing_pipeline
+from embeddings_transformer.metrics import EventTypeMetricCalculator
 from training_pipeline.metric_calculators import MetricCalculator
 from training_pipeline.metrics_containers import MetricContainer
-from training_pipeline.task_constructor import TaskConstructor
-from training_pipeline.tasks import ChurnTasks
 
 
 class UserBehaviorTransformer(nn.Module):
@@ -75,12 +73,12 @@ class UserBehaviorTransformer(nn.Module):
             nn.Linear(embedding_dim * 2, output_dim),
             nn.LayerNorm(output_dim)
         )
-
-        self.churn_head = nn.Sequential(
+        self.event_type_head = nn.Sequential(
             nn.Linear(output_dim, 512),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(512, 1)
+            # -1 because we don't want to predict PAD token
+            nn.Linear(512, vocab_sizes['event_type'] - 1)
         )
 
     def embed_inputs(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -119,7 +117,7 @@ class UserBehaviorTransformer(nn.Module):
         if return_embedding:
             return embedding
 
-        return self.churn_head(embedding)
+        return self.event_type_head(embedding)
 
 
 class TransformerModel(pl.LightningModule):
@@ -133,7 +131,6 @@ class TransformerModel(pl.LightningModule):
     ) -> None:
         super().__init__()
 
-        torch.manual_seed(1278)
         self.learning_rate = learning_rate
         self.net = UserBehaviorTransformer(
             vocab_sizes=vocab_sizes
@@ -156,13 +153,7 @@ class TransformerModel(pl.LightningModule):
         x, y = train_batch
         preds = self.forward(x)
         loss = self.loss_fn(preds, y)
-        self.log(
-            "train_loss",
-            loss,
-            on_step=True,
-            prog_bar=True,
-            logger=True,
-        )
+        self.log("train_loss", loss, on_step=True, prog_bar=True, logger=True)
         return loss
 
     def validation_step(self, val_batch, batch_idx) -> None:
@@ -173,7 +164,7 @@ class TransformerModel(pl.LightningModule):
 
         self.metric_calculator.update(
             predictions=preds,
-            targets=y.long(),
+            targets=y,
         )
 
     def on_validation_epoch_end(self) -> None:
@@ -200,7 +191,7 @@ def train_transformer_model(
 
     # Create dataset and vocab sizes
     print("Loading data...")
-    dataset_train, dataset_valid, vocab_sizes = create_data_processing_pipeline(
+    dataset, vocab_sizes = create_data_processing_pipeline(
         data_dir=data_dir,
         relevant_clients=relevant_clients,
         vocab_path=vocab_path,
@@ -208,32 +199,27 @@ def train_transformer_model(
         rebuild_vocab=False
     )
 
-    # Don't use full dataset for valid, to slow
-    dataset_valid, _ = torch.utils.data.random_split(dataset_valid, [0.1, 0.9])
+    dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1])
 
-    data = ChurnDataModule(dataset_train, dataset_valid, 64, 4)
+    data = ChurnDataModule(dataset_train, dataset_valid, 32, 4)
 
-    task_constructor = TaskConstructor(data_dir=DataDir(data_dir))
-    task = ChurnTasks.CHURN
-    task_settings = task_constructor.construct_task(task=task)
-    pos_weight = torch.tensor([438490 / 72481], dtype=torch.float32)
-    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     model = TransformerModel(
         vocab_sizes=vocab_sizes,
         learning_rate=1e-4,
-        metric_calculator=task_settings.metric_calculator,
-        loss_fn=loss_fn,
-        metrics_tracker=task_settings.metrics_tracker,
+        metric_calculator=EventTypeMetricCalculator(),
+        loss_fn=nn.CrossEntropyLoss(),
+        metrics_tracker=[],
     )
 
     print("Training model...")
     trainer = pl.Trainer(
         accelerator="gpu",
         max_epochs=100,
+        overfit_batches=200,
         callbacks=[
             RichProgressBar(leave=True),
             ModelCheckpoint(monitor="val_auroc", mode="max", save_top_k=1)
-        ]
+        ],
     )
 
     trainer.fit(model=model, datamodule=data)
@@ -241,6 +227,8 @@ def train_transformer_model(
 
 
 if __name__ == '__main__':
+    torch.set_float32_matmul_precision('high')
+
     train_transformer_model(
         data_dir=Path("../data/original/"),
         sequences_path=Path("../data/sequence/sequences.pkl"),
