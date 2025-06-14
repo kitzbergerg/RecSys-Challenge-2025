@@ -123,6 +123,22 @@ class EmbeddingsValidator:
             return f"embeddings dtype should be float16 instead got {self._embeddings.dtype}"
         return None
 
+    def _err_msg_if_embeddings_contain_nans(self) -> Optional[str]:
+        """
+        Check if embeddings do not contain nans.
+        """
+        if np.any(np.isnan(self._embeddings)):
+            return "embeddings should not contain nans"
+        return None
+
+    def _err_msg_if_embeddings_contain_infs(self) -> Optional[str]:
+        """
+        Check if embeddings do not contain infs
+        """
+        if np.any(np.isinf(self._embeddings)):
+            return "embeddings should not contain infs"
+        return None
+
     def _err_msg_if_embeddings_and_client_ids_have_different_length(
         self,
     ) -> Optional[str]:
@@ -165,6 +181,8 @@ class EmbeddingsValidator:
                 self._err_msg_if_embeddings_have_incorrect_shape,
                 self._err_msg_if_embeddings_have_incorrect_dim,
                 self._err_msg_if_embeddings_have_incorrect_dtype,
+                self._err_msg_if_embeddings_contain_nans,
+                self._err_msg_if_embeddings_contain_infs,
             ],
             success_msg="embeddings are valid",
         )
