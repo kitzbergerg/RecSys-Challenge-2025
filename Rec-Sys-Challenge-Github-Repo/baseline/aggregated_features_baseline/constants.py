@@ -12,11 +12,11 @@ class EventTypes(str, Enum):
 
 
 EVENT_TYPE_TO_COLUMNS: Dict[EventTypes, List[str]] = {
-    EventTypes.PRODUCT_BUY: ["sku", "category", "price"],
+    #EventTypes.PRODUCT_BUY: ["sku", "category", "price"],
     EventTypes.ADD_TO_CART: ["sku", "category", "price"],
-    EventTypes.REMOVE_FROM_CART: ["sku", "category", "price"],
-    EventTypes.PAGE_VISIT: ["url"],
-    EventTypes.SEARCH_QUERY: [],
+    #EventTypes.REMOVE_FROM_CART: ["sku", "category", "price"],
+    #EventTypes.PAGE_VISIT: ["url"],
+    #EventTypes.SEARCH_QUERY: [],
 }
 QUERY_COLUMN = "query"
 EMBEDDINGS_DTYPE = np.float16
