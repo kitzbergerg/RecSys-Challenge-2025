@@ -82,16 +82,16 @@ class UserBehaviorTransformer(nn.Module):
 
         self.heads = nn.ModuleDict({
             'event_type': nn.Sequential(
-                nn.Linear(output_dim, 512),
+                nn.Linear(output_dim, 256),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(512, vocab_sizes['event_type'])
+                nn.Linear(256, vocab_sizes['event_type'])
             ),
             'price': nn.Sequential(
-                nn.Linear(output_dim, 512),
+                nn.Linear(output_dim, 256),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(512, vocab_sizes['price'])
+                nn.Linear(256, vocab_sizes['price'])
             ),
             'category': nn.Sequential(
                 nn.Linear(output_dim, 512),
@@ -125,7 +125,7 @@ class UserBehaviorTransformer(nn.Module):
         # Project fixed-size vectors
         embeddings += [self.projectors[key](batch[key]) for key in self.projectors]
         # Add time interval encoding
-        embeddings.append(self.time_encoder(batch['time_since_last_event']))
+        embeddings.append(self.time_encoder(batch['time_delta']))
         # Concatenate along last dim
         return torch.cat(embeddings, dim=-1)
 
@@ -382,7 +382,7 @@ def train_transformer_model(
 
     dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1])
 
-    data = DataModule(dataset_train, dataset_valid, 32, 8)
+    data = DataModule(dataset_train, dataset_valid, 128, 16)
 
     model = TransformerModel(
         vocab_sizes=vocab_sizes,
@@ -393,7 +393,7 @@ def train_transformer_model(
         accelerator="gpu",
         max_epochs=100,
         check_val_every_n_epoch=3,
-        #overfit_batches=500,
+        #overfit_batches=1000,
         callbacks=[
             RichProgressBar(leave=True),
             ModelCheckpoint(monitor="event_type_val_auroc", mode="max", save_top_k=1)

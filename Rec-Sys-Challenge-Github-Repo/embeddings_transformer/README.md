@@ -19,3 +19,11 @@ Sequence Length Stats:
     - 0.90 117.0
     - 0.95 201.0
     - 0.99 560.0
+
+## Run on server
+
+```shell
+DATA_DIR=../../../../shared/194.035-2025S/data/group_project/data_new/
+python -m embeddings_transformer.data_processor --data-dir $DATA_DIR --output-dir ../data/sequence/ --rebuild-vocab
+python -m embeddings_transformer.model --data-dir $DATA_DIR --output-dir ../models/ --vocab-file ../data/sequence/vocabularies.pkl --sequences-file ../data/sequence/sequences.pkl
+```

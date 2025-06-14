@@ -34,32 +34,25 @@ class UserSequenceDataset(Dataset):
         if len(group) > self.max_seq_length:
             group = group.iloc[-self.max_seq_length:]
 
+        seq_len = len(group)
+
         # Initialize tensors
         sequence = {
-            'client_id': client_id,
             'event_type': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'category': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'price': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'url': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'product_name': torch.zeros(MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM, dtype=torch.float32),
             'search_query': torch.zeros(MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM, dtype=torch.float32),
-            'time_since_last_event': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.float32),
+            'time_delta': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.float32),
             'mask': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.bool),  # True for valid positions
-            'seq_len': len(group),
         }
-
-        for i, (_, event) in enumerate(group.iterrows()):
-            sequence['event_type'][i] = event['event_type']
-            sequence['category'][i] = event['category']
-            sequence['price'][i] = event['price']
-            sequence['url'][i] = event['url']
-            sequence['product_name'][i] = torch.from_numpy(event['product_name'])
-            sequence['search_query'][i] = torch.from_numpy(event['search_query'])
-            sequence['mask'][i] = True
-
-            if i > 0:
-                time_delta = group.iloc[i]['timestamp'] - group.iloc[i - 1]['timestamp']
-                sequence['time_since_last_event'][i] = max(time_delta.seconds, 1)
+        tensor_fields = ['event_type', 'category', 'price', 'url', 'time_delta']
+        for field in tensor_fields:
+            sequence[field][:seq_len] = torch.as_tensor(group[field].values)
+        for emb_field in ['product_name', 'search_query']:
+            sequence[emb_field][:seq_len] = torch.from_numpy(np.stack(group[emb_field].values))
+        sequence['mask'][:seq_len] = True
 
         # Choose a random position to mask
         mask_pos = random.randint(0, len(group) - 1)
@@ -104,9 +97,9 @@ class UserSequenceDataset(Dataset):
         # TODO: add extra input to model to signal prediction
         if mask_pos != 0 and random.random() < 0.7:
             # As long as there is more than 1 event we can try to predict the time delta
-            targets['time_targets'] = math.log(sequence['time_since_last_event'][mask_pos].item())
+            targets['time_targets'] = math.log(sequence['time_delta'][mask_pos].item())
             targets['time_mask'] = True
-            sequence['time_since_last_event'][mask_pos] = -1  # not categorical and 0 is for padding
+            sequence['time_delta'][mask_pos] = -1  # not categorical and 0 is for padding
 
         # TODO: add other tasks more aligned with goal e.g.
         #  - time till next purchase

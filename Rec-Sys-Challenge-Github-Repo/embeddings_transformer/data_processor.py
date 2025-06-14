@@ -226,6 +226,7 @@ class EventSequenceProcessor:
 
         df = self.map_to_sequences(data_dir, relevant_clients)
         df = df.sort_values(['client_id', 'timestamp'])
+        df['time_delta'] = df.groupby('client_id')['timestamp'].diff().dt.total_seconds().replace(0, 1).fillna(0)
         return df
 
 
