@@ -13,6 +13,10 @@ from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 
 
+"""
+I experimented with this based on loose tutorials and adapting them to our calculators feature interface. The config class up top is very handy for having all of the config in one place, due to our development happening in parralel the different methods are a bit diffuse in terms of implementation unity.
+"""
+
 class Config:
 
     DATA_DIR = "/home/jovyan/shared/194.035-2025S/data/group_project/data_new/"
@@ -52,7 +56,7 @@ EVENT_TYPE_TO_COLUMNS = {
 
 
 class Autoencoder(nn.Module):
-    """A simple autoencoder model for compressing features."""
+    """mishmash of different sources, but mostly this https://www.datacamp.com/tutorial/introduction-to-autoencoders"""
     def __init__(self, input_dim, embedding_dim):
         super(Autoencoder, self).__init__()
         self.encoder = nn.Sequential(
@@ -74,8 +78,8 @@ class Autoencoder(nn.Module):
         return decoded
 
     def get_embeddings(self, x):
-        """Use the encoder part to get the final embeddings."""
-        return self.encoder(x)
+        
+        return self.encoder(x) # uses the encoder to get the final embeddings here
 
 
 
@@ -196,7 +200,7 @@ def main():
         print(f"  - Epoch [{epoch+1}/{Config.AE_EPOCHS}], Loss: {epoch_loss:.6f}")
 
     # Generate fiinal embeddings 
-    print("\n Generating final embeddings...")
+    print("\n Generating final embeddings")
     autoencoder.eval()
     with torch.no_grad():
         all_features_on_device = features_tensor.to(device)
@@ -204,7 +208,7 @@ def main():
         final_embeddings_numpy = final_embeddings_tensor.cpu().numpy()
 
     #Last step: Save embeddings
-    print("\n Saving final embeddings...")
+    print("\n Saving final embeddings (after converting to float16 to appease the validator script)")
 
 
     final_embeddings_numpy = final_embeddings_numpy.astype(np.float16) #validator said it wants fp16
