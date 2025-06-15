@@ -1,10 +1,10 @@
 from dataclasses import asdict
 import torch
 import torch.nn as nn
-from torch import optim, Tensor
+from torch import Tensor
 import pytorch_lightning as pl
 import numpy as np
-from typing import Dict, Callable, List, Tuple, Optional
+from typing import Dict, Tuple, Optional
 from pathlib import Path
 from pytorch_lightning.callbacks import RichProgressBar
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -82,36 +82,35 @@ class UserBehaviorTransformer(nn.Module):
 
         self.heads = nn.ModuleDict({
             'event_type': nn.Sequential(
-                nn.Linear(output_dim, 512),
-                nn.GELU(),
+                TransformerBottleneckBlock(output_dim, 2048),
                 nn.Dropout(dropout),
-                nn.Linear(512, vocab_sizes['event_type'])
+                TransformerBottleneckBlock(output_dim, 2048),
+                nn.Linear(output_dim, vocab_sizes['event_type'])
             ),
             'price': nn.Sequential(
-                nn.Linear(output_dim, 512),
-                nn.GELU(),
+                TransformerBottleneckBlock(output_dim, 2048),
                 nn.Dropout(dropout),
-                nn.Linear(512, vocab_sizes['price'])
+                TransformerBottleneckBlock(output_dim, 2048),
+                nn.Linear(output_dim, vocab_sizes['price'])
             ),
             'category': nn.Sequential(
-                nn.Linear(output_dim, 1024),
-                nn.GELU(),
+                TransformerBottleneckBlock(output_dim, 2048),
                 nn.Dropout(dropout),
-                nn.Linear(1024, vocab_sizes['category'])
+                TransformerBottleneckBlock(output_dim, 2048),
+                nn.Linear(output_dim, vocab_sizes['category'])
             ),
             'url': nn.Sequential(
-                nn.Linear(output_dim, 1024),
-                nn.GELU(),
+                TransformerBottleneckBlock(output_dim, 2048),
                 nn.Dropout(dropout),
-                nn.Linear(1024, vocab_sizes['url'])
+                TransformerBottleneckBlock(output_dim, 2048),
+                nn.Linear(output_dim, vocab_sizes['url'])
             ),
             'time': nn.Sequential(
-                nn.Linear(output_dim, 512),
-                nn.GELU(),
+                TransformerBottleneckBlock(output_dim, 2048),
                 nn.Dropout(dropout),
-                nn.Linear(512, 1)
+                TransformerBottleneckBlock(output_dim, 2048),
+                nn.Linear(output_dim, 1)
             )
-            # TODO: text embeddings
         })
 
     def embed_inputs(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -165,6 +164,23 @@ class UserBehaviorTransformer(nn.Module):
             return embedding, predictions
 
         return embedding
+
+
+class TransformerBottleneckBlock(nn.Module):
+    def __init__(self, thin_dim: int, wide_dim: int):
+        super().__init__()
+        self.l1 = nn.Linear(thin_dim, wide_dim)
+        self.l2 = nn.Linear(wide_dim, thin_dim)
+        self.gelu = nn.GELU()
+        self.norm = nn.LayerNorm(thin_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = self.l1(x)
+        x = self.gelu(x)
+        x = self.l2(x)
+        x = self.norm(x + residual)
+        return x
 
 
 class TimeIntervalEncoder(nn.Module):
@@ -252,23 +268,20 @@ class TransformerModel(pl.LightningModule):
     def __init__(
             self,
             vocab_sizes: Dict[str, int],
+            class_weights: Dict[str, Tensor],
             learning_rate: float = 1e-4,
-            task_weights: Optional[Dict[str, float]] = None
     ) -> None:
         super().__init__()
 
         self.learning_rate = learning_rate
+        self.class_weights = class_weights
         self.net = UserBehaviorTransformer(vocab_sizes=vocab_sizes)
-        self.loss_calculator = MultiTaskLoss(task_weights)
-        self.validation_metrics = {
-            'event_type': [],
-            'category': [],
-            'url': [],
-            'price': [],
-            'time': []
-        }
+        self.loss_calculator = MultiTaskLoss(class_weights=class_weights)
         self.metric_calculator = {
             'event_type': MultiClassMetricCalculator(vocab_sizes['event_type']),
+            'category': MultiClassMetricCalculator(vocab_sizes['category']),
+            'price': MultiClassMetricCalculator(vocab_sizes['price']),
+            'url': MultiClassMetricCalculator(vocab_sizes['url']),
         }
 
     def forward(self, x) -> Tensor:
@@ -283,11 +296,11 @@ class TransformerModel(pl.LightningModule):
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': scheduler,
-                'monitor': 'val_loss',
+                'monitor': 'val_total_loss',
                 'interval': 'epoch',
                 'frequency': 2
             },
-            'monitor': 'val_loss'
+            'monitor': 'val_total_loss'
         }
 
     def setup(self, stage):
@@ -299,20 +312,11 @@ class TransformerModel(pl.LightningModule):
         Training step that handles multi-task loss computation.
         """
         x, y = batch
-
-        # Get shared embeddings and task predictions
         embeddings, predictions = self.net(x, return_task_predictions=True)
-
-        # Compute multi-task loss
         losses = self.loss_calculator.compute_loss(predictions, y)
 
-        # Log individual task losses for monitoring
         for task_name, loss_value in losses.items():
-            if task_name != 'total':
-                self.log(f'train_{task_name}_loss', loss_value, on_step=True, prog_bar=False, logger=True)
-
-        # Log total loss
-        self.log('train_loss', losses['total'], on_step=True, prog_bar=True, logger=True)
+            self.log(f'train_{task_name}_loss', loss_value, on_step=True, prog_bar=task_name == 'total', logger=True)
 
         return losses['total']
 
@@ -324,44 +328,12 @@ class TransformerModel(pl.LightningModule):
         embeddings, predictions = self.net(x, return_task_predictions=True)
         losses = self.loss_calculator.compute_loss(predictions, y)
 
-        # Compute accuracy for each task where we have targets
-        accuracies = {}
+        for task_name, loss_value in losses.items():
+            self.log(f'val_{task_name}_loss', loss_value, prog_bar=task_name in ['total', 'time'], logger=True)
 
-        # Event type accuracy
-        valid_indices = y['event_type_mask']
-        if valid_indices.sum() > 0:
-            event_preds = torch.argmax(predictions['event_type'][valid_indices], dim=1)
-            event_acc = (event_preds == y['event_type_targets'][valid_indices]).float().mean()
-            accuracies['event_type'] = event_acc
-            self.metric_calculator['event_type'].update(predictions['event_type'][valid_indices],
-                                                        y['event_type_targets'][valid_indices])
-
-        # Category accuracy (only for valid targets)
-        valid_indices = y['category_mask']
-        if valid_indices.sum() > 0:
-            cat_preds = torch.argmax(predictions['category'][valid_indices], dim=1)
-            cat_acc = (cat_preds == y['category_targets'][valid_indices]).float().mean()
-            accuracies['category'] = cat_acc
-
-        # Price accuracy
-        valid_indices = y['price_mask']
-        if valid_indices.sum() > 0:
-            price_preds = torch.argmax(predictions['price'][valid_indices], dim=1)
-            price_acc = (price_preds == y['price_targets'][valid_indices]).float().mean()
-            accuracies['price'] = price_acc
-
-        # URL accuracy
-        valid_indices = y['url_mask']
-        if valid_indices.sum() > 0:
-            url_preds = torch.argmax(predictions['url'][valid_indices], dim=1)
-            url_acc = (url_preds == y['url_targets'][valid_indices]).float().mean()
-            accuracies['url'] = url_acc
-
-        # Log validation metrics
-        self.log('val_loss', losses['total'], prog_bar=True, logger=True)
-        for task_name, acc in accuracies.items():
-            self.log(f'val_{task_name}_acc', acc, prog_bar=True, logger=True)
-        self.log('val_time_loss', losses['time'], prog_bar=True, logger=True)
+        for key, calc in self.metric_calculator.items():
+            valid_indices = y[f'{key}_mask']
+            calc.update(predictions[f'{key}'][valid_indices], y[f'{key}_targets'][valid_indices])
 
         return losses['total']
 
@@ -391,14 +363,13 @@ def train_transformer_model(
         sequences_path=sequences_path,
         rebuild_vocab=False
     )
+    class_weights = dataset.class_weights
 
     dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1])
 
     data = DataModule(dataset_train, dataset_valid, 128, 8)
 
-    model = TransformerModel(
-        vocab_sizes=vocab_sizes,
-    )
+    model = TransformerModel(vocab_sizes=vocab_sizes, class_weights=class_weights)
 
     print("Training model...")
     trainer = pl.Trainer(

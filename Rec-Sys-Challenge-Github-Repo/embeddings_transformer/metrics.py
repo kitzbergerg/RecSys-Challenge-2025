@@ -3,6 +3,7 @@ from typing import Optional, Dict
 
 import torch
 from torch import nn
+from torch import Tensor
 
 from training_pipeline.metric_calculators import MetricCalculator
 from torchmetrics.classification import AUROC
@@ -15,8 +16,8 @@ class MultiTaskLoss:
     Handles computing and weighting losses across multiple tasks.
     """
 
-    def __init__(self, task_weights: Optional[Dict[str, float]] = None):
-        self.task_weights = task_weights or {
+    def __init__(self, class_weights: Dict[str, Tensor]):
+        self.task_weights = {
             'event_type': 0.3,  # Easiest, so lower weight
             'price': 1,
             'category': 2,  # Higher weight because it's harder
@@ -26,10 +27,12 @@ class MultiTaskLoss:
 
         self.loss_fns = {
             # TODO: figure out class balances, weighting?
-            'event_type': nn.CrossEntropyLoss(ignore_index=-1, ),
-            'price': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1),
-            'category': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1),
-            'url': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.2),
+            'event_type': nn.CrossEntropyLoss(ignore_index=-1, weight=class_weights['event_type'].to("cuda")),
+            # TODO: test if price works better as scalar
+            'price': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.3),
+            'category': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1,
+                                            weight=class_weights['category'].to("cuda")),
+            'url': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.2, weight=class_weights['url'].to("cuda")),
             'time': nn.MSELoss(),
         }
 
@@ -40,43 +43,11 @@ class MultiTaskLoss:
         losses = {}
         total_loss = 0.0
 
-        # Event type loss
-        valid_indices = batch['event_type_mask']
-        if valid_indices.sum() > 0:
-            event_loss = self.loss_fns['event_type'](predictions['event_type'][valid_indices],
-                                                     batch['event_type_targets'][valid_indices])
-            losses['event_type'] = event_loss
-            total_loss += self.task_weights['event_type'] * event_loss
-
-        # Category loss
-        valid_indices = batch['category_mask']
-        if valid_indices.sum() > 0:
-            category_loss = self.loss_fns['category'](predictions['category'][valid_indices],
-                                                      batch['category_targets'][valid_indices])
-            losses['category'] = category_loss
-            total_loss += self.task_weights['category'] * category_loss
-
-        # Price loss
-        valid_indices = batch['price_mask']
-        if valid_indices.sum() > 0:
-            price_loss = self.loss_fns['price'](predictions['price'][valid_indices],
-                                                batch['price_targets'][valid_indices])
-            losses['price'] = price_loss
-            total_loss += self.task_weights['price'] * price_loss
-
-        # URL loss
-        valid_indices = batch['url_mask']
-        if valid_indices.sum() > 0:
-            url_loss = self.loss_fns['url'](predictions['url'][valid_indices], batch['url_targets'][valid_indices])
-            losses['url'] = url_loss
-            total_loss += self.task_weights['url'] * url_loss
-
-        # Time loss
-        valid_indices = batch['time_mask']
-        if valid_indices.sum() > 0:
-            time_loss = self.loss_fns['time'](predictions['time'][valid_indices], batch['time_targets'][valid_indices])
-            losses['time'] = time_loss
-            total_loss += self.task_weights['time'] * time_loss
+        for key, loss_fn in self.loss_fns.items():
+            valid_indices = batch[f'{key}_mask']
+            loss = loss_fn(predictions[key][valid_indices], batch[f'{key}_targets'][valid_indices])
+            losses[key] = loss
+            total_loss += self.task_weights[key] * loss
 
         losses['total'] = total_loss
         return losses

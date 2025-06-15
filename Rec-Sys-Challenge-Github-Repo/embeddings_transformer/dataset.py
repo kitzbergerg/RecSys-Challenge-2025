@@ -1,4 +1,5 @@
 import math
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -12,16 +13,62 @@ from embeddings_transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
 class UserSequenceDataset(Dataset):
     """Dataset for user event sequences."""
 
-    def __init__(self, sequences_df: pd.DataFrame, active_clients: np.ndarray,
+    def __init__(self, sequences_df: pd.DataFrame, vocab_sizes: Dict[str, int],
                  max_seq_length: int = MAX_SEQUENCE_LENGTH):
         self.max_seq_length = max_seq_length
 
-        # Filter to active clients
-        self.sequences_df = sequences_df[sequences_df['client_id'].isin(active_clients)].copy()
+        self.sequences_df = sequences_df
 
-        # Group by client_id and pre-store list of client_ids
         self.client_groups = self.sequences_df.groupby('client_id')
         self.client_ids = list(self.client_groups.groups.keys())
+
+        self._compute_class_stats(vocab_sizes)
+
+    def _compute_class_stats(self, vocab_sizes: Dict[str, int]):
+        event_type_counts = self.sequences_df['event_type'].value_counts()
+        price_counts = self.sequences_df[self.sequences_df['event_type'].isin([4, 5, 6])]['price'].value_counts()
+        cat_counts = self.sequences_df[self.sequences_df['event_type'].isin([4, 5, 6])]['category'].value_counts()
+        url_counts = self.sequences_df[self.sequences_df['event_type'] == 7]['url'].value_counts()
+
+        self.class_stats = {
+            'category': {
+                'learnable': set(cat_counts[cat_counts >= 10].index),
+                'common': set(cat_counts[cat_counts >= 100].index),
+                'rare': set(cat_counts[cat_counts < 10].index)
+            },
+            'url': {
+                'learnable': set(url_counts[url_counts >= 750].index),
+                'common': set(url_counts[url_counts >= 10000].index),
+                'rare': set(url_counts[url_counts < 750].index)
+            }
+        }
+
+        # Compute class weights for event_type
+        event_type_weights = 1.0 / np.log1p(event_type_counts + 1)  # log(1 + freq) smoothing
+        event_type_weights = event_type_weights / event_type_weights.max()  # Normalize to [0, 1]
+        event_type_weight_tensor = torch.ones(vocab_sizes['event_type'])
+        for idx, w in event_type_weights.items():
+            event_type_weight_tensor[idx] = w
+
+        # Compute class weights for category
+        cat_weights = 1.0 / np.log1p(cat_counts + 1)  # log(1 + freq) smoothing
+        cat_weights = cat_weights / cat_weights.max()  # Normalize to [0, 1]
+        cat_weight_tensor = torch.ones(vocab_sizes['category'])
+        for idx, w in cat_weights.items():
+            cat_weight_tensor[idx] = w
+
+        # Compute class weights for URL
+        url_weights = 1.0 / np.log1p(url_counts + 1)
+        url_weights = url_weights / url_weights.max()
+        url_weight_tensor = torch.ones(vocab_sizes['url'])
+        for idx, w in url_weights.items():
+            url_weight_tensor[idx] = w
+
+        self.class_weights = {
+            'event_type': event_type_weight_tensor,
+            'category': cat_weight_tensor,
+            'url': url_weight_tensor
+        }
 
     def __len__(self):
         return len(self.client_ids)
@@ -78,7 +125,9 @@ class UserSequenceDataset(Dataset):
             sequence['event_type'][mask_pos] = 2
 
         if original_event_type in [4, 5, 6]:
-            if random.random() < 0.5:
+            is_learnable = sequence['category'][mask_pos].item() in self.class_stats['category']['learnable']
+            mask_prob = 0.5 if is_learnable else 0.05
+            if random.random() < mask_prob:
                 # For product events, we can also predict category
                 targets['category_targets'] = sequence['category'][mask_pos].item()
                 targets['category_mask'] = True
@@ -92,7 +141,9 @@ class UserSequenceDataset(Dataset):
                 # Randomly remove text embeddings so transformer can't infer type from token data
                 sequence['product_name'][mask_pos] = torch.zeros(TEXT_EMB_DIM, dtype=torch.float32)
 
-        if original_event_type == 7 and random.random() < 0.2:
+        is_learnable = sequence['url'][mask_pos].item() in self.class_stats['url']['learnable']
+        mask_prob = 0.3 if is_learnable else 0.05
+        if original_event_type == 7 and random.random() < mask_prob:
             # For page visits, we can predict URL
             targets['url_targets'] = sequence['url'][mask_pos].item()
             targets['url_mask'] = True

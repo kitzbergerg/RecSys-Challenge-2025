@@ -274,9 +274,8 @@ def create_data_processing_pipeline(
         sequences = pd.read_pickle(sequences_path)
 
     # Create dataset
-    active_clients = np.load(data_dir / "target" / "active_clients.npy")
-    dataset = UserSequenceDataset(sequences, active_clients, max_seq_length)
     vocab_sizes = processor.get_vocab_sizes()
+    dataset = UserSequenceDataset(sequences, vocab_sizes, max_seq_length)
 
     return dataset, vocab_sizes
 
