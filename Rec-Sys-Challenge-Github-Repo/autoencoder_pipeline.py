@@ -29,7 +29,11 @@ class Config:
     STATS_NUM_DAYS = [7, 30, 90]
     STATS_TOP_N = 10
 
-    # Autoencoder params, taken from the tutorial
+    
+    
+    # Autoencoder params
+    USE_DEEPER_AUTOENCODER = True
+    USE_LR_SCHEDULING = True
     EMBEDDING_DIM = 128 
     AE_EPOCHS = 50
     AE_BATCH_SIZE = 256
@@ -82,6 +86,37 @@ class Autoencoder(nn.Module):
         return self.encoder(x) # uses the encoder to get the final embeddings here
 
 
+class Autoencoder_deeper(nn.Module):
+    def __init__(self, input_dim, embedding_dim):
+        super(Autoencoder_deeper, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, 512),       #wider than before
+            nn.ReLU(),
+            nn.Linear(512, 256),             
+            nn.ReLU(),
+            nn.Dropout(0.2),                 
+            nn.Linear(256, embedding_dim)    #bottleneck
+        )
+        
+        self.decoder = nn.Sequential(
+            nn.Linear(embedding_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 512),             
+            nn.ReLU(),
+            nn.Linear(512, input_dim),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return decoded
+
+    def get_embeddings(self, x):
+        
+        return self.encoder(x) # uses the encoder to get the final embeddings here
+
+    
 
 def main():
 
@@ -142,7 +177,7 @@ def main():
     buy_events_df = all_event_dfs.get(EventTypes.PRODUCT_BUY)
 
     for event_type, df in all_event_dfs.items(): #loop over the feature types and generate features
-        print(f"  - Generating features for event type: {event_type.value}...")
+        print(f"  - generating features for event type: {event_type.value}...")
         feature_agg.generate_features(
             event_type=event_type,
             client_id_column="client_id",
@@ -155,7 +190,7 @@ def main():
     # Postprocessing steps like aligning, scaling
     print("\n Postprocessing steps like aligning, scaling")
     client_ids_from_agg, all_user_features_raw = feature_agg.merge_features()
-    print(f"  - Generated raw features of shape: {all_user_features_raw.shape}")
+    print(f"  -Feature shape: {all_user_features_raw.shape}")
     
     raw_features_df = pd.DataFrame(all_user_features_raw, index=client_ids_from_agg)
     
@@ -170,20 +205,29 @@ def main():
     all_user_features_scaled = scaler.fit_transform(all_user_features_filled)
     print(f"  - Final scaled feature matrix shape: {all_user_features_scaled.shape}")
 
-    
+    # ~~~~~~~ TRAINING STEP ~~~~
     print("\n Training the Autoencoder...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"  - Using device: {device}")
+    print(f"  - device: {device}")
 
     features_tensor = torch.tensor(all_user_features_scaled, dtype=torch.float32)
     dataset = TensorDataset(features_tensor)
     dataloader = DataLoader(dataset, batch_size=Config.AE_BATCH_SIZE, shuffle=True)
     
     input_dim_ae = all_user_features_scaled.shape[1]
-    autoencoder = Autoencoder(input_dim_ae, Config.EMBEDDING_DIM).to(device)
+
+    if(Config.USE_DEEPER_AUTOENCODER):
+        autoencoder = Autoencoder_deeper(input_dim_ae, Config.EMBEDDING_DIM).to(device)
+        print("Using the deeper autoencoder model, one extra layer babyyy")
+    else:  
+        autoencoder = Autoencoder(input_dim_ae, Config.EMBEDDING_DIM).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(autoencoder.parameters(), lr=Config.AE_LEARNING_RATE)
-
+    # try scheduling the LR: https://stackoverflow.com/questions/63108131/pytorch-schedule-learning-rate 
+    if(Config.USE_LR_SCHEDULING):
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, verbose=True)
+        print("Using LR Scheduling")
+    
     autoencoder.train()
     for epoch in range(Config.AE_EPOCHS):
         epoch_loss = 0.0
@@ -198,6 +242,8 @@ def main():
         
         epoch_loss /= len(dataloader.dataset)
         print(f"  - Epoch [{epoch+1}/{Config.AE_EPOCHS}], Loss: {epoch_loss:.6f}")
+        if(Config.USE_LR_SCHEDULING):
+            scheduler.step(epoch_loss)
 
     # Generate fiinal embeddings 
     print("\n Generating final embeddings")
