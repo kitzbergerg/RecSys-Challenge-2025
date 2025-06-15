@@ -13,11 +13,16 @@ from embeddings_transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
 class UserSequenceDataset(Dataset):
     """Dataset for user event sequences."""
 
-    def __init__(self, sequences_df: pd.DataFrame, vocab_sizes: Dict[str, int],
-                 max_seq_length: int = MAX_SEQUENCE_LENGTH):
-        self.max_seq_length = max_seq_length
-
+    def __init__(
+            self,
+            sequences_df: pd.DataFrame,
+            vocab_sizes: Dict[str, int],
+            max_seq_length: int = MAX_SEQUENCE_LENGTH,
+            disable_masking: bool = False,
+    ):
         self.sequences_df = sequences_df
+        self.max_seq_length = max_seq_length
+        self.disable_masking = disable_masking
 
         self.client_groups = self.sequences_df.groupby('client_id')
         self.client_ids = list(self.client_groups.groups.keys())
@@ -101,6 +106,7 @@ class UserSequenceDataset(Dataset):
 
         # Initialize tensors
         sequence = {
+            'client_id': client_id,
             'event_type': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'category': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'price': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
@@ -117,9 +123,6 @@ class UserSequenceDataset(Dataset):
             sequence[emb_field][:seq_len] = torch.from_numpy(np.stack(group[emb_field].values))
         sequence['mask'][:seq_len] = True
 
-        # Choose a random position to mask
-        mask_pos = self.sample_mask_position(group)
-
         targets = {
             'event_type_targets': -1,
             'event_type_mask': False,
@@ -132,6 +135,12 @@ class UserSequenceDataset(Dataset):
             'time_targets': -1,
             'time_mask': False,
         }
+
+        if self.disable_masking:
+            return sequence, targets
+
+        # Choose a random position to mask
+        mask_pos = self.sample_mask_position(group)
 
         # Mask event type
         original_event_type = sequence['event_type'][mask_pos].item()

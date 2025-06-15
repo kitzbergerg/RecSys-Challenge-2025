@@ -1,4 +1,17 @@
-## Statistics
+## Run
+
+```shell
+DATA_DIR=../../../../shared/194.035-2025S/data/group_project/data_new/
+python -m embeddings_transformer.data_processor --data-dir $DATA_DIR --output-dir ../data/sequence/ --rebuild-vocab
+python -m embeddings_transformer.model --data-dir $DATA_DIR --output-dir ../models/ --vocab-file ../data/sequence/vocabularies.pkl --sequences-file ../data/sequence/sequences.pkl
+
+python -m embeddings_transformer.create_embeddings --data-dir ../data/original/ --embeddings-dir ../results/transformer/v1/ --vocab-file ../data/sequence/vocabularies.pkl --sequences-file ../data/sequence/sequences.pkl --checkpoint-path lightning_logs/version_1/checkpoints/epoch=47-step=337536.ckpt
+python -m validator.run --data-dir ../data/original/ --embeddings-dir ../results/transformer/v1/
+
+python -m training_pipeline.train --data-dir ../data/original/ --embeddings-dir ../results/transformer/v1/ --tasks churn propensity_category propensity_sku --log-name baseline --accelerator gpu --devices 0 --disable-relevant-clients-check
+```
+
+## Dataset Statistics
 
 number of unique urls: 10212493  
 number of unique product categories: 6622  
@@ -19,11 +32,3 @@ Sequence Length Stats:
     - 0.90 117.0
     - 0.95 201.0
     - 0.99 560.0
-
-## Run on server
-
-```shell
-DATA_DIR=../../../../shared/194.035-2025S/data/group_project/data_new/
-python -m embeddings_transformer.data_processor --data-dir $DATA_DIR --output-dir ../data/sequence/ --rebuild-vocab
-python -m embeddings_transformer.model --data-dir $DATA_DIR --output-dir ../models/ --vocab-file ../data/sequence/vocabularies.pkl --sequences-file ../data/sequence/sequences.pkl
-```

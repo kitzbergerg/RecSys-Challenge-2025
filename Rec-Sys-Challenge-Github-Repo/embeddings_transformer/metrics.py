@@ -26,9 +26,7 @@ class MultiTaskLoss:
         }
 
         self.loss_fns = {
-            # TODO: figure out class balances, weighting?
             'event_type': nn.CrossEntropyLoss(ignore_index=-1, weight=class_weights['event_type'].to("cuda")),
-            # TODO: test if price works better as scalar
             'price': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.3),
             'category': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1,
                                             weight=class_weights['category'].to("cuda")),
