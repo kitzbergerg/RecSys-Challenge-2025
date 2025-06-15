@@ -21,7 +21,10 @@ class Config:
 
     DATA_DIR = "/home/jovyan/shared/194.035-2025S/data/group_project/data_new/"
     CLIENT_IDS_PATH = os.path.join(DATA_DIR, "input/relevant_clients.npy") 
-    OUTPUT_DIR = "./output_new"
+    OUTPUT_DIR = "./output_deep"
+
+    SAVE_RAW_FEATURES = True
+    SAVE_RAW_FEATURES_DIR = "./raw_features"
     EMBEDDINGS_OUTPUT_PATH = os.path.join(OUTPUT_DIR, "embeddings.npy")
     IS_TEST_RUN = False
     TEST_SAMPLE_SIZE = 2000
@@ -29,15 +32,16 @@ class Config:
     STATS_NUM_DAYS = [7, 30, 90]
     STATS_TOP_N = 10
 
-    
+    LOAD_FROM_EXISTING_EMBEDDINGS = False
+    INPUT_FEATURES_DIR = "./embeddings_tobi"
     
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
-    USE_LR_SCHEDULING = True
-    EMBEDDING_DIM = 128 
+    USE_LR_SCHEDULING = False
+    EMBEDDING_DIM = 400 # tobi's embeddings have 400 cols
     AE_EPOCHS = 50
     AE_BATCH_SIZE = 256
-    AE_LEARNING_RATE = 1e-3
+    AE_LEARNING_RATE = 1e-3 #common default value to start with, but with scheduling I might now set it to 1e-2?
 
 
 
@@ -60,13 +64,13 @@ EVENT_TYPE_TO_COLUMNS = {
 
 
 class Autoencoder(nn.Module):
-    """mishmash of different sources, but mostly this https://www.datacamp.com/tutorial/introduction-to-autoencoders"""
+    """mishmash of different sources, but mostly this https://www.datacamp.com/tutorial/introduction-to-autoencoders, building on the basic one,   and adding dropout to maybe get some of the benefits of a denoising autoencoder????"""
     def __init__(self, input_dim, embedding_dim):
         super(Autoencoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, 256), # Intermediate layer
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.2), # can maybe act as denoising, don't know how to measure it but if it doesn't make things worse i'm keeping it
             nn.Linear(256, embedding_dim)
         )
         self.decoder = nn.Sequential(
@@ -128,77 +132,118 @@ def main():
     output_dir = Path(Config.OUTPUT_DIR)
     # Ensure output directory exists
     os.makedirs(Config.OUTPUT_DIR, exist_ok=True)
-    
-    if not os.path.exists(Config.CLIENT_IDS_PATH):
-        raise FileNotFoundError(f"Crucial file not found: {Config.CLIENT_IDS_PATH}. This file is required for final ordering.")
-    relevant_client_ids = np.load(Config.CLIENT_IDS_PATH, allow_pickle=True)
 
+    if not (Config.LOAD_FROM_EXISTING_EMBEDDINGS):
     
-
-    if Config.IS_TEST_RUN:
-        print("TEST RUN WITH FEWER USERS") 
-        if len(relevant_client_ids) > Config.TEST_SAMPLE_SIZE:
-            relevant_client_ids = np.random.choice(relevant_client_ids, Config.TEST_SAMPLE_SIZE, replace=False)
+        if not os.path.exists(Config.CLIENT_IDS_PATH):
+            raise FileNotFoundError(f"Crucial file not found: {Config.CLIENT_IDS_PATH}. This file is required for final ordering.")
+        relevant_client_ids = np.load(Config.CLIENT_IDS_PATH, allow_pickle=True)
+    
+        
+    
+        if Config.IS_TEST_RUN:
+            print("TEST RUN WITH FEWER USERS") 
+            if len(relevant_client_ids) > Config.TEST_SAMPLE_SIZE:
+                relevant_client_ids = np.random.choice(relevant_client_ids, Config.TEST_SAMPLE_SIZE, replace=False)
+            else:
+                print("Warning: Sample size larger than all clients")
+                
         else:
-            print("Warning: Sample size larger than all clients")
-            
-    else:
-        pass
+            pass
+        
+        product_properties_df = pd.read_parquet(os.path.join(Config.DATA_DIR, "product_properties.parquet"))
+        
+        all_event_dfs = {}
+        for event_type, filename in EVENT_TYPE_TO_FILENAME.items():
+            path = os.path.join(Config.DATA_DIR, filename)
+            if os.path.exists(path):
+                print(f"  - Loading {filename}...")
+                df = pd.read_parquet(path)
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                all_event_dfs[event_type] = df
+            else:
+                print(f"  - Warning: {filename} not found, skipping.")
     
-    product_properties_df = pd.read_parquet(os.path.join(Config.DATA_DIR, "product_properties.parquet"))
+        #  Merge product properties
+        props_to_merge = product_properties_df[['sku', 'price', 'category', 'name']].copy()
+        if EventTypes.PRODUCT_BUY in all_event_dfs:
+            all_event_dfs[EventTypes.PRODUCT_BUY] = all_event_dfs[EventTypes.PRODUCT_BUY].merge(props_to_merge, on='sku', how='left')
+        if EventTypes.ADD_TO_CART in all_event_dfs:
+            all_event_dfs[EventTypes.ADD_TO_CART] = all_event_dfs[EventTypes.ADD_TO_CART].merge(props_to_merge, on='sku', how='left')
+        print("  - Merged product properties with buy and cart events.")
     
-    all_event_dfs = {}
-    for event_type, filename in EVENT_TYPE_TO_FILENAME.items():
-        path = os.path.join(Config.DATA_DIR, filename)
-        if os.path.exists(path):
-            print(f"  - Loading {filename}...")
-            df = pd.read_parquet(path)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            all_event_dfs[event_type] = df
-        else:
-            print(f"  - Warning: {filename} not found, skipping.")
-
-    #  Merge product properties
-    props_to_merge = product_properties_df[['sku', 'price', 'category', 'name']].copy()
-    if EventTypes.PRODUCT_BUY in all_event_dfs:
-        all_event_dfs[EventTypes.PRODUCT_BUY] = all_event_dfs[EventTypes.PRODUCT_BUY].merge(props_to_merge, on='sku', how='left')
-    if EventTypes.ADD_TO_CART in all_event_dfs:
-        all_event_dfs[EventTypes.ADD_TO_CART] = all_event_dfs[EventTypes.ADD_TO_CART].merge(props_to_merge, on='sku', how='left')
-    print("  - Merged product properties with buy and cart events.")
-
-    
-    print("\n Aggregating features")
-    feature_agg = FeaturesAggregator( #instantiate featuresagg with params from above
-        num_days=Config.STATS_NUM_DAYS,
-        top_n=Config.STATS_TOP_N,
-        relevant_client_ids=relevant_client_ids
-    )
-
-    buy_events_df = all_event_dfs.get(EventTypes.PRODUCT_BUY)
-
-    for event_type, df in all_event_dfs.items(): #loop over the feature types and generate features
-        print(f"  - generating features for event type: {event_type.value}...")
-        feature_agg.generate_features(
-            event_type=event_type,
-            client_id_column="client_id",
-            df=df,
-            columns=EVENT_TYPE_TO_COLUMNS.get(event_type, []),
-            product_properties=product_properties_df, # Pass for reference if any calc needs it
-            buy_events=buy_events_df # For CartAbandonmentCalculator
+        
+        print("\n Aggregating features")
+        feature_agg = FeaturesAggregator( #instantiate featuresagg with params from above
+            num_days=Config.STATS_NUM_DAYS,
+            top_n=Config.STATS_TOP_N,
+            relevant_client_ids=relevant_client_ids
         )
+    
+        buy_events_df = all_event_dfs.get(EventTypes.PRODUCT_BUY)
+    
+        for event_type, df in all_event_dfs.items(): #loop over the feature types and generate features
+            print(f"  - generating features for event type: {event_type.value}...")
+            feature_agg.generate_features(
+                event_type=event_type,
+                client_id_column="client_id",
+                df=df,
+                columns=EVENT_TYPE_TO_COLUMNS.get(event_type, []),
+                product_properties=product_properties_df, # Pass for reference if any calc needs it
+                buy_events=buy_events_df # For CartAbandonmentCalculator
+            )
+    
+        # Postprocessing steps like aligning, scaling
+        print("\n Postprocessing steps like aligning, scaling")
+        client_ids_from_agg, all_user_features_raw = feature_agg.merge_features()
+        print(f"  -Feature shape: {all_user_features_raw.shape}")
+        
+        raw_features_df = pd.DataFrame(all_user_features_raw, index=client_ids_from_agg)
+        #IMPORTANT!!!!!! Align rows to the official client_ids.npy order.
+        ordered_features_df = raw_features_df.reindex(relevant_client_ids)
+        
+        # Fill any nans, from reindexing or calculations
+        all_user_features_filled = ordered_features_df.fillna(0).values
 
-    # Postprocessing steps like aligning, scaling
-    print("\n Postprocessing steps like aligning, scaling")
-    client_ids_from_agg, all_user_features_raw = feature_agg.merge_features()
-    print(f"  -Feature shape: {all_user_features_raw.shape}")
+        if(Config.SAVE_RAW_FEATURES):
+            try:
     
-    raw_features_df = pd.DataFrame(all_user_features_raw, index=client_ids_from_agg)
+                raw_feat_dir = Path(Config.SAVE_RAW_FEATURES_DIR)
+                raw_feat_dir.mkdir(parents=True, exist_ok=True) 
+                embeddings_path = output_dir / "embeddings.npy"
+                client_ids_path = output_dir / "client_ids.npy"
+                client_ids_to_save = relevant_client_ids #should this be client_ids_from_agg? 
+        
+                
+                np.save(embeddings_path, all_user_features_filled.to_numpy())
+                np.save(client_ids_path, client_ids_to_save)
+            except Exception as e:
+                print("ERROR during attempt to save raw features") 
+                print(e)
+
     
-    #IMPORTANT!!!!!! Align rows to the official client_ids.npy order.
-    ordered_features_df = raw_features_df.reindex(relevant_client_ids)
+    else: 
+        
+         
+        print("LOADING EXISTING RAW FEATURE EMBEDDINGS")
+        
+        input_embeddings_path = Path(Config.INPUT_FEATURES_DIR) / "embeddings.npy"
+        input_clients_path = Path(Config.INPUT_FEATURES_DIR) / "client_ids.npy"
+        
+        if not input_embeddings_path.exists() or not input_clients_path.exists():
+            raise FileNotFoundError(f"Input files not found in {Config.INPUT_FEATURES_DIR}. needs to contain embeddings.npy and client_ids.npy.")
     
-    # Fill any nans, from reindexing or calculations
-    all_user_features_filled = ordered_features_df.fillna(0).values
+
+        all_user_features_raw = np.load(input_embeddings_path)
+        # Fill any nans, from reindexing or calculations, unsure if necessary here?
+        #all_user_features_filled = ordered_features_df.fillna(0).values
+        
+        relevant_client_ids = np.load(input_clients_path)
+        client_ids_to_save = relevant_client_ids
+        print(f"  - Loaded raw features of shape: {all_user_features_raw.shape}")
+        assert len(all_user_features_raw) == len(client_ids_to_save), "Mismatch between embeddings and client_ids length!"
+        all_user_features_filled = all_user_features_raw #not actually, just a hack so the script afterwards works with it, could consider doing away with keeping them unfilled at all to save on ram a bit
+        
     
     # Scale features to be between 0 and 1 for the autoencoder
     scaler = MinMaxScaler()
@@ -225,7 +270,7 @@ def main():
     optimizer = optim.Adam(autoencoder.parameters(), lr=Config.AE_LEARNING_RATE)
     # try scheduling the LR: https://stackoverflow.com/questions/63108131/pytorch-schedule-learning-rate 
     if(Config.USE_LR_SCHEDULING):
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=10, verbose=True)
         print("Using LR Scheduling")
     
     autoencoder.train()
