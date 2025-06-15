@@ -34,6 +34,7 @@ class EventSequenceProcessor:
         self.PAD_TOKEN = 0
         self.UNK_TOKEN = 1
         self.MASK_TOKEN = 2
+        self.CONTEXT_MASK_TOKEN = 3
 
         # Event type mapping
         self.event_types = {
@@ -41,12 +42,13 @@ class EventSequenceProcessor:
             'PAD_TOKEN': self.PAD_TOKEN,
             'UNK_TOKEN': self.UNK_TOKEN,
             'MASK_TOKEN': self.MASK_TOKEN,
+            'CONTEXT_MASK_TOKEN': self.CONTEXT_MASK_TOKEN,
 
-            'product_buy': 3,
-            'add_to_cart': 4,
-            'remove_from_cart': 5,
-            'page_visit': 6,
-            'search_query': 7
+            'product_buy': 4,
+            'add_to_cart': 5,
+            'remove_from_cart': 6,
+            'page_visit': 7,
+            'search_query': 8
         }
 
         # Vocabularies (will be built from data)
@@ -55,16 +57,19 @@ class EventSequenceProcessor:
             -1: self.PAD_TOKEN,
             -2: self.UNK_TOKEN,
             -3: self.MASK_TOKEN,
+            -4: self.CONTEXT_MASK_TOKEN,
         }
         self.category_vocab = {
             -1: self.PAD_TOKEN,
             -2: self.UNK_TOKEN,
             -3: self.MASK_TOKEN,
+            -4: self.CONTEXT_MASK_TOKEN,
         }
         self.price_vocab = {
             -1: self.PAD_TOKEN,
             -2: self.UNK_TOKEN,
             -3: self.MASK_TOKEN,
+            -4: self.CONTEXT_MASK_TOKEN,
         }
         self.vocab_built = False
 
@@ -89,8 +94,8 @@ class EventSequenceProcessor:
         # Keep only URLs that appear frequently enough
         frequent_urls = url_counts[url_counts >= self.min_url_count]
         assert len(frequent_urls) < self.max_url_vocab
-        top_urls = frequent_urls.head(self.max_url_vocab - 3)
-        self.url_vocab.update({url: idx + 3 for idx, url in enumerate(top_urls.index)})
+        top_urls = frequent_urls.head(self.max_url_vocab - 4)
+        self.url_vocab.update({url: idx + 4 for idx, url in enumerate(top_urls.index)})
         print(f"Built URL vocabulary with {len(self.url_vocab)} entries")
 
         # Category/Price vocabulary from product events
@@ -110,13 +115,13 @@ class EventSequenceProcessor:
         frequent_categories = {cat: count for cat, count in category_counts.items() if count >= self.min_category_count}
         assert len(frequent_categories) < self.max_category_vocab
         sorted_categories = sorted(frequent_categories.items(), key=lambda x: x[1], reverse=True)
-        top_categories = sorted_categories[:self.max_category_vocab - 3]
+        top_categories = sorted_categories[:self.max_category_vocab - 4]
 
-        self.category_vocab.update({cat: idx + 3 for idx, (cat, _) in enumerate(top_categories)})
+        self.category_vocab.update({cat: idx + 4 for idx, (cat, _) in enumerate(top_categories)})
         print(f"Built category vocabulary with {len(self.category_vocab)} entries")
 
         # Price vocabulary (simpler - just use the price buckets directly)
-        self.price_vocab.update({bucket: bucket + 3 for bucket in range(100)})
+        self.price_vocab.update({bucket: bucket + 4 for bucket in range(100)})
         print(f"Built price vocabulary with {len(self.price_vocab)} entries")
 
         self.vocab_built = True

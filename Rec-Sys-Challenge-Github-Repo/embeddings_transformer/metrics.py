@@ -16,20 +16,18 @@ class MultiTaskLoss:
     """
 
     def __init__(self, task_weights: Optional[Dict[str, float]] = None):
-        # Default weights - you can adjust these based on task importance
         self.task_weights = task_weights or {
-            'event_type': 0.7,  # Easiest, so lower weight
-            'price': 1.0,
-            'category': 2.0,  # Higher weight because it's harder
-            'url': 2.0,  # Higher weight because it's event harder than category, but also not as important
-            'time': 1.5  # Important since we want to learn temporal information
+            'event_type': 0.3,  # Easiest, so lower weight
+            'price': 1,
+            'category': 2,  # Higher weight because it's harder
+            'url': 2,  # Higher weight because it's event harder than category, but also not as important
+            'time': 1.3  # Important since we want to learn temporal information
         }
 
-        # Use separate loss functions for each task
         self.loss_fns = {
-            # TODO: figure out class balance, weighting?
-            'event_type': nn.CrossEntropyLoss(ignore_index=-1),
-            'price': nn.CrossEntropyLoss(ignore_index=-1),
+            # TODO: figure out class balances, weighting?
+            'event_type': nn.CrossEntropyLoss(ignore_index=-1, ),
+            'price': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1),
             'category': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1),
             'url': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.2),
             'time': nn.MSELoss(),
@@ -43,9 +41,12 @@ class MultiTaskLoss:
         total_loss = 0.0
 
         # Event type loss
-        event_loss = self.loss_fns['event_type'](predictions['event_type'], batch['event_type_targets'])
-        losses['event_type'] = event_loss
-        total_loss += self.task_weights['event_type'] * event_loss
+        valid_indices = batch['event_type_mask']
+        if valid_indices.sum() > 0:
+            event_loss = self.loss_fns['event_type'](predictions['event_type'][valid_indices],
+                                                     batch['event_type_targets'][valid_indices])
+            losses['event_type'] = event_loss
+            total_loss += self.task_weights['event_type'] * event_loss
 
         # Category loss
         valid_indices = batch['category_mask']
@@ -83,11 +84,6 @@ class MultiTaskLoss:
 
 @dataclass(frozen=True)
 class EventTypeMetricContainer(MetricContainer):
-    """
-    Instance of the class `MetricContainer` for storing metrics reported from
-    Churn tasks.
-    """
-
     val_auroc: float
 
     def compute_weighted_metric(self) -> float:
@@ -95,11 +91,6 @@ class EventTypeMetricContainer(MetricContainer):
 
 
 class MultiClassMetricCalculator(MetricCalculator):
-    """
-    Instance of the abstract `MetricCalculator` class for computing metrics for
-    chrun type tasks.
-    """
-
     def __init__(self, num_classes: int):
         self.val_auroc = AUROC(task="multiclass", num_classes=num_classes)
 

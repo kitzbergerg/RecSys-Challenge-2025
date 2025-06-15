@@ -27,7 +27,7 @@ class UserBehaviorTransformer(nn.Module):
             num_layers: int = 4,
             num_heads: int = 8,
             max_seq_length: int = MAX_SEQUENCE_LENGTH,
-            output_dim: int = 512,
+            output_dim: int = 1024,
             dropout: float = 0.1,
     ):
         super().__init__()
@@ -82,28 +82,28 @@ class UserBehaviorTransformer(nn.Module):
 
         self.heads = nn.ModuleDict({
             'event_type': nn.Sequential(
-                nn.Linear(output_dim, 256),
+                nn.Linear(output_dim, 512),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(256, vocab_sizes['event_type'])
+                nn.Linear(512, vocab_sizes['event_type'])
             ),
             'price': nn.Sequential(
-                nn.Linear(output_dim, 256),
+                nn.Linear(output_dim, 512),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(256, vocab_sizes['price'])
+                nn.Linear(512, vocab_sizes['price'])
             ),
             'category': nn.Sequential(
-                nn.Linear(output_dim, 512),
+                nn.Linear(output_dim, 1024),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(512, vocab_sizes['category'])
+                nn.Linear(1024, vocab_sizes['category'])
             ),
             'url': nn.Sequential(
-                nn.Linear(output_dim, 512),
+                nn.Linear(output_dim, 1024),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(512, vocab_sizes['url'])
+                nn.Linear(1024, vocab_sizes['url'])
             ),
             'time': nn.Sequential(
                 nn.Linear(output_dim, 512),
@@ -276,8 +276,17 @@ class TransformerModel(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5,
+                                                               min_lr=1e-6)
+
         return {
             'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'monitor': 'val_loss',
+                'interval': 'epoch',
+                'frequency': 2
+            },
             'monitor': 'val_loss'
         }
 
@@ -319,10 +328,13 @@ class TransformerModel(pl.LightningModule):
         accuracies = {}
 
         # Event type accuracy
-        event_preds = torch.argmax(predictions['event_type'], dim=1)
-        event_acc = (event_preds == y['event_type_targets']).float().mean()
-        accuracies['event_type'] = event_acc
-        self.metric_calculator['event_type'].update(predictions['event_type'], y['event_type_targets'])
+        valid_indices = y['event_type_mask']
+        if valid_indices.sum() > 0:
+            event_preds = torch.argmax(predictions['event_type'][valid_indices], dim=1)
+            event_acc = (event_preds == y['event_type_targets'][valid_indices]).float().mean()
+            accuracies['event_type'] = event_acc
+            self.metric_calculator['event_type'].update(predictions['event_type'][valid_indices],
+                                                        y['event_type_targets'][valid_indices])
 
         # Category accuracy (only for valid targets)
         valid_indices = y['category_mask']
@@ -382,7 +394,7 @@ def train_transformer_model(
 
     dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1])
 
-    data = DataModule(dataset_train, dataset_valid, 128, 16)
+    data = DataModule(dataset_train, dataset_valid, 128, 8)
 
     model = TransformerModel(
         vocab_sizes=vocab_sizes,
@@ -391,17 +403,17 @@ def train_transformer_model(
     print("Training model...")
     trainer = pl.Trainer(
         accelerator="gpu",
-        max_epochs=100,
-        check_val_every_n_epoch=3,
-        #overfit_batches=1000,
+        max_epochs=50,
+        check_val_every_n_epoch=2,
+        #overfit_batches=100,
         callbacks=[
             RichProgressBar(leave=True),
-            ModelCheckpoint(monitor="event_type_val_auroc", mode="max", save_top_k=1)
+            ModelCheckpoint(every_n_epochs=3, save_top_k=-1, save_weights_only=False),
         ],
     )
 
     trainer.fit(model=model, datamodule=data)
-    torch.save(model.state_dict(), output_dir / "transformer.pt")
+    torch.save(model.net.state_dict(), output_dir / "transformer.pt")
 
 
 if __name__ == '__main__':

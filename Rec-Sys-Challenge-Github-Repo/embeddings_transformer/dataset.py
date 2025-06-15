@@ -72,40 +72,59 @@ class UserSequenceDataset(Dataset):
 
         # Mask event type
         original_event_type = sequence['event_type'][mask_pos].item()
-        targets['event_type_targets'] = original_event_type
-        targets['event_type_mask'] = True
-        sequence['event_type'][mask_pos] = 2
+        if random.random() < 0.8:
+            targets['event_type_targets'] = original_event_type
+            targets['event_type_mask'] = True
+            sequence['event_type'][mask_pos] = 2
 
-        if original_event_type in [3, 4, 5] and random.random() < 0.3:
-            # For product events, we can also predict category
-            targets['category_targets'] = sequence['category'][mask_pos].item()
-            targets['category_mask'] = True
-            sequence['category'][mask_pos] = 2
+        if original_event_type in [4, 5, 6]:
+            if random.random() < 0.5:
+                # For product events, we can also predict category
+                targets['category_targets'] = sequence['category'][mask_pos].item()
+                targets['category_mask'] = True
+                sequence['category'][mask_pos] = 2
+            if random.random() < 0.5:
+                # For product events, we can also predict price
+                targets['price_targets'] = sequence['price'][mask_pos].item()
+                targets['price_mask'] = True
+                sequence['price'][mask_pos] = 2
+            if random.random() < 0.7:
+                # Randomly remove text embeddings so transformer can't infer type from token data
+                sequence['product_name'][mask_pos] = torch.zeros(TEXT_EMB_DIM, dtype=torch.float32)
 
-        if original_event_type in [3, 4, 5] and random.random() < 0.3:
-            # For product events, we can also predict price
-            targets['price_targets'] = sequence['price'][mask_pos].item()
-            targets['price_mask'] = True
-            sequence['price'][mask_pos] = 2
-
-        if original_event_type == 6 and random.random() < 0.2:
+        if original_event_type == 7 and random.random() < 0.2:
             # For page visits, we can predict URL
             targets['url_targets'] = sequence['url'][mask_pos].item()
             targets['url_mask'] = True
             sequence['url'][mask_pos] = 2
 
         # TODO: add extra input to model to signal prediction
-        if mask_pos != 0 and random.random() < 0.7:
+        if mask_pos != 0 and random.random() < 0.6:
             # As long as there is more than 1 event we can try to predict the time delta
             targets['time_targets'] = math.log(sequence['time_delta'][mask_pos].item())
             targets['time_mask'] = True
             sequence['time_delta'][mask_pos] = -1  # not categorical and 0 is for padding
 
-        # TODO: add other tasks more aligned with goal e.g.
-        #  - time till next purchase
-        #  - better masking (span masking, category masking i.e. mask all events for category)
+        if seq_len > 5 and random.random() < 0.2:
+            # zero elements around mask so transformer needs to learn general patterns, not just local event around mask
+            mask_start = random.randint(0, min(seq_len // 6, 3))
+            mask_end = random.randint(0, min(seq_len // 6, 3))
+            for i in range(max(mask_pos - mask_start, 0), min(mask_pos + mask_end + 1, seq_len)):
+                if i != mask_pos:
+                    mask_event(sequence, i)
 
         return sequence, targets
+
+
+def mask_event(sequence, idx):
+    # special token for missing context
+    sequence['event_type'][idx] = 3
+    sequence['category'][idx] = 3
+    sequence['price'][idx] = 3
+    sequence['url'][idx] = 3
+    sequence['product_name'][idx] = torch.zeros(TEXT_EMB_DIM, dtype=torch.float32)
+    sequence['search_query'][idx] = torch.zeros(TEXT_EMB_DIM, dtype=torch.float32)
+    sequence['time_delta'][idx] = -1
 
 
 def collate_fn(batch):
