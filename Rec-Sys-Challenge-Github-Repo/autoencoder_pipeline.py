@@ -29,7 +29,7 @@ class Config:
     IS_TEST_RUN = False
     TEST_SAMPLE_SIZE = 2000
    
-    STATS_NUM_DAYS = [7, 30, 90]
+    STATS_NUM_DAYS = [2, 7, 30, 90]
     STATS_TOP_N = 10
 
     LOAD_FROM_EXISTING_EMBEDDINGS = False
@@ -37,9 +37,9 @@ class Config:
     
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
-    USE_LR_SCHEDULING = False
-    EMBEDDING_DIM = 200
-    AE_EPOCHS = 50
+    USE_LR_SCHEDULING = True
+    EMBEDDING_DIM = 180
+    AE_EPOCHS = 52
     AE_BATCH_SIZE = 256
     AE_LEARNING_RATE = 1e-3 #common default value to start with, but with scheduling I might now set it to 1e-2?
 
