@@ -271,10 +271,11 @@ class FeaturesAggregator:
         """
         client_ids = []
         embeddings = []
+        processed_event_types = self._features_sizes.keys() # Get the list of event types that were actually processed
         for client_id in tqdm(self._aggregated_features.keys()):
             client_ids.append(client_id)
             embeddings_for_client: List[np.ndarray] = []
-            for event_type in EVENT_TYPE_TO_COLUMNS.keys():
+            for event_type in processed_event_types:
                 features = self._get_features(
                     client_id=client_id, event_type=event_type
                 )
