@@ -136,7 +136,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--split",
-        action="split",
+        action="store_true",
         help="If set, split data is used for embeddings generation. If not set, all data is used.",
     )
     return parser
