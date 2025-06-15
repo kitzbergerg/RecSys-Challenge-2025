@@ -38,7 +38,7 @@ class Config:
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
     USE_LR_SCHEDULING = False
-    EMBEDDING_DIM = 400 # tobi's embeddings have 400 cols
+    EMBEDDING_DIM = 200
     AE_EPOCHS = 50
     AE_BATCH_SIZE = 256
     AE_LEARNING_RATE = 1e-3 #common default value to start with, but with scheduling I might now set it to 1e-2?
@@ -57,7 +57,7 @@ EVENT_TYPE_TO_FILENAME = {
 EVENT_TYPE_TO_COLUMNS = {
     EventTypes.PRODUCT_BUY: ['sku', 'category'],
     EventTypes.ADD_TO_CART: ['sku', 'category'],
-    EventTypes.SEARCH_QUERY: [QUERY_COLUMN], # QUERY_COLUMN is likely 'query'
+    EventTypes.SEARCH_QUERY: ['query']
     EventTypes.PAGE_VISIT: ['url'],
 }
 
@@ -68,16 +68,16 @@ class Autoencoder(nn.Module):
     def __init__(self, input_dim, embedding_dim):
         super(Autoencoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 256), # Intermediate layer
+            nn.Linear(input_dim, 256), 
             nn.ReLU(),
-            nn.Dropout(0.2), # can maybe act as denoising, don't know how to measure it but if it doesn't make things worse i'm keeping it
+            nn.Dropout(0.2), # regularization, can maybe act as a sort of denoising,
             nn.Linear(256, embedding_dim)
         )
         self.decoder = nn.Sequential(
             nn.Linear(embedding_dim, 256),
             nn.ReLU(),
             nn.Linear(256, input_dim),
-            nn.Sigmoid() # Assumes input was scaled to [0,1] by MinMaxScaler
+            nn.Sigmoid() # assumes input was scaled to [0,1]
         )
 
     def forward(self, x):
@@ -94,9 +94,9 @@ class Autoencoder_deeper(nn.Module):
     def __init__(self, input_dim, embedding_dim):
         super(Autoencoder_deeper, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 512),       #wider than before
+            nn.Linear(input_dim, 256),       #wider than before
             nn.ReLU(),
-            nn.Linear(512, 256),             
+            nn.Linear(256, 256),             
             nn.ReLU(),
             nn.Dropout(0.2),                 
             nn.Linear(256, embedding_dim)    #bottleneck
@@ -105,9 +105,9 @@ class Autoencoder_deeper(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(embedding_dim, 256),
             nn.ReLU(),
-            nn.Linear(256, 512),             
+            nn.Linear(256, 256),             
             nn.ReLU(),
-            nn.Linear(512, input_dim),
+            nn.Linear(256, input_dim),
             nn.Sigmoid()
         )
 
@@ -215,7 +215,7 @@ def main():
                 client_ids_to_save = relevant_client_ids #should this be client_ids_from_agg? 
         
                 
-                np.save(embeddings_path, all_user_features_filled.to_numpy())
+                np.save(embeddings_path, all_user_features_filled)
                 np.save(client_ids_path, client_ids_to_save)
             except Exception as e:
                 print("ERROR during attempt to save raw features") 
@@ -270,7 +270,7 @@ def main():
     optimizer = optim.Adam(autoencoder.parameters(), lr=Config.AE_LEARNING_RATE)
     # try scheduling the LR: https://stackoverflow.com/questions/63108131/pytorch-schedule-learning-rate 
     if(Config.USE_LR_SCHEDULING):
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=10, verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5, verbose=True)
         print("Using LR Scheduling")
     
     autoencoder.train()
