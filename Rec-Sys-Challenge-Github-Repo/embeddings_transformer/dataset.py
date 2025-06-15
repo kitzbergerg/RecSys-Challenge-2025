@@ -70,8 +70,24 @@ class UserSequenceDataset(Dataset):
             'url': url_weight_tensor
         }
 
+        # Smooth with sqrt to reduce variance in extremely rare events
+        event_type_weights = 1.0 / np.sqrt(event_type_counts + 1)  # add 1 to avoid div-by-zero
+        event_type_weights = event_type_weights / event_type_weights.sum()  # normalize to sum to 1
+        self.event_type_sampling_probs = event_type_weights.to_dict()  # {event_type_id: prob}
+
     def __len__(self):
         return len(self.client_ids)
+
+    def sample_mask_position(self, group):
+        weights = group['event_type'].map(self.event_type_sampling_probs).fillna(0.0).to_numpy()
+        total = weights.sum()
+
+        if total == 0.0:
+            print("WARNING: no event type sampling probabilities")
+            return np.random.randint(0, len(group))
+
+        probabilities = weights / total
+        return np.random.choice(len(group), p=probabilities)
 
     def __getitem__(self, idx):
         client_id = self.client_ids[idx]
@@ -102,7 +118,7 @@ class UserSequenceDataset(Dataset):
         sequence['mask'][:seq_len] = True
 
         # Choose a random position to mask
-        mask_pos = random.randint(0, len(group) - 1)
+        mask_pos = self.sample_mask_position(group)
 
         targets = {
             'event_type_targets': -1,

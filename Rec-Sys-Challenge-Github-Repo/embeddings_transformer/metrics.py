@@ -21,7 +21,7 @@ class MultiTaskLoss:
             'event_type': 0.3,  # Easiest, so lower weight
             'price': 1,
             'category': 2,  # Higher weight because it's harder
-            'url': 2,  # Higher weight because it's event harder than category, but also not as important
+            'url': 3,  # Higher weight because it's even harder than category, but also not as important
             'time': 1.3  # Important since we want to learn temporal information
         }
 

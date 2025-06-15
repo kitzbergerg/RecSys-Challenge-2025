@@ -272,6 +272,7 @@ class TransformerModel(pl.LightningModule):
             learning_rate: float = 1e-4,
     ) -> None:
         super().__init__()
+        self.save_hyperparameters()
 
         self.learning_rate = learning_rate
         self.class_weights = class_weights
@@ -350,6 +351,7 @@ def train_transformer_model(
         output_dir: Path,
         sequences_path: Path,
         vocab_path: Path,
+        ckpt_path: Optional[Path]
 ):
     # Load relevant clients
     relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
@@ -366,10 +368,7 @@ def train_transformer_model(
     class_weights = dataset.class_weights
 
     dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1])
-
     data = DataModule(dataset_train, dataset_valid, 128, 8)
-
-    model = TransformerModel(vocab_sizes=vocab_sizes, class_weights=class_weights)
 
     print("Training model...")
     trainer = pl.Trainer(
@@ -382,8 +381,12 @@ def train_transformer_model(
             ModelCheckpoint(every_n_epochs=3, save_top_k=-1, save_weights_only=False),
         ],
     )
-
-    trainer.fit(model=model, datamodule=data)
+    if ckpt_path is None:
+        model = TransformerModel(vocab_sizes=vocab_sizes, class_weights=class_weights)
+        trainer.fit(model=model, datamodule=data)
+    else:
+        model = TransformerModel.load_from_checkpoint(ckpt_path)
+        trainer.fit(model=model, datamodule=data, ckpt_path=ckpt_path)
     torch.save(model.net.state_dict(), output_dir / "transformer.pt")
 
 
@@ -397,6 +400,7 @@ if __name__ == '__main__':
     parser.add_argument("--sequences-file", type=str, required=True)
     parser.add_argument("--vocab-file", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
+    parser.add_argument("--checkpoint-path", type=str, required=False)
 
     args = parser.parse_args()
 
@@ -405,10 +409,15 @@ if __name__ == '__main__':
     vocab_path = Path(args.vocab_file)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    if args.checkpoint_path is not None:
+        ckpt_path = Path(args.checkpoint_path)
+    else:
+        ckpt_path = None
 
     train_transformer_model(
         data_dir=data_dir,  # "../data/original"
         output_dir=output_dir,  # "../models"
         sequences_path=sequences_path,  # "../data/sequence/sequences.pkl"
-        vocab_path=vocab_path  # "../data/sequence/vocabularies.pkl",
+        vocab_path=vocab_path,  # "../data/sequence/vocabularies.pkl",
+        ckpt_path=ckpt_path
     )
