@@ -49,6 +49,7 @@ def create_embeddings(
     num_days: List[int],
     top_n: int,
     relevant_client_ids: np.ndarray,
+    split: bool,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Generate and merge user representation embeddings for specified event types.
@@ -81,14 +82,14 @@ def create_embeddings(
     #buy_df = pd.read_parquet(data_dir.data_dir / "product_buy.parquet")
     #properties_df = pd.read_parquet(data_dir.properties_file)
     #buy_df = join_properties(event_df=buy_df, properties_df=properties_df)
-    buy_df = load_with_properties(data_dir=data_dir, event_type=EventTypes.PRODUCT_BUY.value)
+    buy_df = load_with_properties(data_dir=data_dir, event_type=EventTypes.PRODUCT_BUY.value, split=split)
     #buy_df = load_with_properties(data_dir, event_type=EventTypes.PRODUCT_BUY.value)
     buy_df["timestamp"] = pd.to_datetime(buy_df["timestamp"])
     display(buy_df)
     for event_type in EVENT_TYPE_TO_COLUMNS.keys():
         logger.info("Generating features for %s event type", event_type.value)
         logger.info("Loading data...")
-        event_df = load_with_properties(data_dir=data_dir, event_type=event_type.value)
+        event_df = load_with_properties(data_dir=data_dir, event_type=event_type.value, split=split)
         event_df["timestamp"] = pd.to_datetime(event_df.timestamp)
         display(event_df)
         logger.info("Generating features...")
@@ -133,6 +134,11 @@ def get_parser() -> argparse.ArgumentParser:
         default=10,
         help="Number of top column values to consider in feature generation",
     )
+    parser.add_argument(
+        "--split",
+        action="split",
+        help="If set, split data is used for embeddings generation. If not set, all data is used.",
+    )
     return parser
 
 
@@ -141,12 +147,16 @@ def main(params):
 
     embeddings_dir = Path(params.embeddings_dir)
 
+    split = params.split
+    print(split)
+
     relevant_client_ids = load_relevant_clients_ids(input_dir=data_dir.input_dir)
     client_ids, embeddings = create_embeddings(
         data_dir=data_dir,
         num_days=params.num_days,
         top_n=params.top_n,
         relevant_client_ids=relevant_client_ids,
+        split=split
     )
 
     save_embeddings(
