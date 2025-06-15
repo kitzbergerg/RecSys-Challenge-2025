@@ -57,7 +57,7 @@ EVENT_TYPE_TO_FILENAME = {
 EVENT_TYPE_TO_COLUMNS = {
     EventTypes.PRODUCT_BUY: ['sku', 'category'],
     EventTypes.ADD_TO_CART: ['sku', 'category'],
-    EventTypes.SEARCH_QUERY: ['query']
+    EventTypes.SEARCH_QUERY: ['query'],
     EventTypes.PAGE_VISIT: ['url'],
 }
 
@@ -316,6 +316,25 @@ def main():
     np.save(embeddings_path, final_embeddings_numpy)
     np.save(client_ids_path, client_ids_to_save)
 
+
+    #EXPERIMENT: Concatenating them side by side with the original features, like gabriel's idea
+    scaler_raw = MinMaxScaler()
+    scaled_raw_features = scaler_raw.fit_transform(all_user_features_filled)
+    
+    scaler_ae = MinMaxScaler()
+    scaled_ae_embeddings = scaler_ae.fit_transform(final_embeddings_numpy)
+    
+    # Concatenate them side-by-side
+    hybrid_embeddings = np.concatenate([scaled_raw_features, scaled_ae_embeddings], axis=1)
+    
+    print(f"Final hybrid embedding shape: {hybrid_embeddings.shape}") # Should be (N, 1430)
+    
+    # Convert to float16 and save this new hybrid embedding
+    hybrid_embeddings_f16 = hybrid_embeddings.astype(np.float16)
+    np.save(output_dir / "hybrid_embeddings.npy", hybrid_embeddings_f16)
+
+
+    
     print("SUCCESS!")
     print(f"Embeddings of shape {final_embeddings_numpy.shape} saved to:")
     print(f"{embeddings_path}")
