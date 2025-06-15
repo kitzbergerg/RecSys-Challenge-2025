@@ -21,9 +21,9 @@ class Config:
 
     DATA_DIR = "/home/jovyan/shared/194.035-2025S/data/group_project/data_new/"
     CLIENT_IDS_PATH = os.path.join(DATA_DIR, "input/relevant_clients.npy") 
-    OUTPUT_DIR = "./output_new"
+    OUTPUT_DIR = "./output_deep"
 
-    SAVE_RAW_FEATURES = False
+    SAVE_RAW_FEATURES = True
     SAVE_RAW_FEATURES_DIR = "./raw_features"
     EMBEDDINGS_OUTPUT_PATH = os.path.join(OUTPUT_DIR, "embeddings.npy")
     IS_TEST_RUN = False
@@ -32,12 +32,12 @@ class Config:
     STATS_NUM_DAYS = [7, 30, 90]
     STATS_TOP_N = 10
 
-    LOAD_FROM_EXISTING_EMBEDDINGS = True
+    LOAD_FROM_EXISTING_EMBEDDINGS = False
     INPUT_FEATURES_DIR = "./embeddings_tobi"
     
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
-    USE_LR_SCHEDULING = True
+    USE_LR_SCHEDULING = False
     EMBEDDING_DIM = 400 # tobi's embeddings have 400 cols
     AE_EPOCHS = 50
     AE_BATCH_SIZE = 256
@@ -270,7 +270,7 @@ def main():
     optimizer = optim.Adam(autoencoder.parameters(), lr=Config.AE_LEARNING_RATE)
     # try scheduling the LR: https://stackoverflow.com/questions/63108131/pytorch-schedule-learning-rate 
     if(Config.USE_LR_SCHEDULING):
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=10, verbose=True)
         print("Using LR Scheduling")
     
     autoencoder.train()
