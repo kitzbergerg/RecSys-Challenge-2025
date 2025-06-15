@@ -22,6 +22,9 @@ class Config:
     DATA_DIR = "/home/jovyan/shared/194.035-2025S/data/group_project/data_new/"
     CLIENT_IDS_PATH = os.path.join(DATA_DIR, "input/relevant_clients.npy") 
     OUTPUT_DIR = "./output_new"
+
+    SAVE_RAW_FEATURES = False
+    SAVE_RAW_FEATURES_DIR = "./raw_features"
     EMBEDDINGS_OUTPUT_PATH = os.path.join(OUTPUT_DIR, "embeddings.npy")
     IS_TEST_RUN = False
     TEST_SAMPLE_SIZE = 2000
@@ -35,7 +38,7 @@ class Config:
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
     USE_LR_SCHEDULING = True
-    EMBEDDING_DIM = 128 
+    EMBEDDING_DIM = 400 # tobi's embeddings have 400 cols
     AE_EPOCHS = 50
     AE_BATCH_SIZE = 256
     AE_LEARNING_RATE = 1e-3 #common default value to start with, but with scheduling I might now set it to 1e-2?
@@ -201,6 +204,24 @@ def main():
         
         # Fill any nans, from reindexing or calculations
         all_user_features_filled = ordered_features_df.fillna(0).values
+
+        if(Config.SAVE_RAW_FEATURES):
+            try:
+    
+                raw_feat_dir = Path(Config.SAVE_RAW_FEATURES_DIR)
+                raw_feat_dir.mkdir(parents=True, exist_ok=True) 
+                embeddings_path = output_dir / "embeddings.npy"
+                client_ids_path = output_dir / "client_ids.npy"
+                client_ids_to_save = relevant_client_ids #should this be client_ids_from_agg? 
+        
+                
+                np.save(embeddings_path, all_user_features_filled.to_numpy())
+                np.save(client_ids_path, client_ids_to_save)
+            except Exception as e:
+                print("ERROR during attempt to save raw features") 
+                print(e)
+
+    
     else: 
         
          
