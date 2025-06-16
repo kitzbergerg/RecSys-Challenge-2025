@@ -175,7 +175,6 @@ class RecencyCalculator(Calculator):
         return np.array([recency_days], dtype=EMBEDDINGS_DTYPE)
 
 
-# --- Diversity Calculator (Entropy of a categorical column) ---
 class DiversityCalculator(Calculator):
     def __init__(self, column: str):
         self.column = column
@@ -190,7 +189,6 @@ class DiversityCalculator(Calculator):
         return np.array([entropy], dtype=EMBEDDINGS_DTYPE)
 
 
-# --- Price Statistics Calculator ---
 class PriceStatsCalculator(Calculator):
     def __init__(self):
         pass
@@ -214,7 +212,6 @@ class PriceStatsCalculator(Calculator):
         ], dtype=EMBEDDINGS_DTYPE)
 
 
-# --- Cart Abandonment Calculator ---
 class CartAbandonmentCalculator(Calculator):
     def __init__(self, buy_events: pd.DataFrame):
         self.buy_skus = set(buy_events["sku"])
@@ -232,13 +229,6 @@ class CartAbandonmentCalculator(Calculator):
         return np.array([abandonment_ratio], dtype=EMBEDDINGS_DTYPE)
 
 class RemoveFromCartCalculator(Calculator):
-    """
-    Calculator for remove_from_cart events.
-    Computes:
-    - total number of remove_from_cart events
-    - number of unique SKUs removed
-    """
-
     def __init__(self):
         pass
 
