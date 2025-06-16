@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Dict
 
 import torch
 from torch import nn
@@ -18,11 +18,12 @@ class MultiTaskLoss:
 
     def __init__(self, class_weights: Dict[str, Tensor]):
         self.task_weights = {
-            'event_type': 0.3,  # Easiest, so lower weight
-            'price': 1,
-            'category': 2,  # Higher weight because it's harder
-            'url': 3,  # Higher weight because it's even harder than category, but also not as important
-            'time': 1.3  # Important since we want to learn temporal information
+            'event_type': 0.2,  # Easiest, so lower weight
+            'price': 0.6,
+            'category': 1.5,  # Higher weight because it's harder
+            'sku': 1.8,  # Higher weight because it's harder
+            'url': 2,  # Higher weight because it's even harder than category, but also not as important
+            'time': 1  # Important since we want to learn temporal information
         }
 
         self.loss_fns = {
@@ -30,6 +31,7 @@ class MultiTaskLoss:
             'price': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.3),
             'category': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.1,
                                             weight=class_weights['category'].to("cuda")),
+            'sku': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.15, weight=class_weights['sku'].to("cuda")),
             'url': nn.CrossEntropyLoss(ignore_index=-1, label_smoothing=0.2, weight=class_weights['url'].to("cuda")),
             'time': nn.MSELoss(),
         }
@@ -43,9 +45,12 @@ class MultiTaskLoss:
 
         for key, loss_fn in self.loss_fns.items():
             valid_indices = batch[f'{key}_mask']
-            loss = loss_fn(predictions[key][valid_indices], batch[f'{key}_targets'][valid_indices])
-            losses[key] = loss
-            total_loss += self.task_weights[key] * loss
+            if valid_indices.sum() > 0:
+                loss = loss_fn(predictions[key][valid_indices], batch[f'{key}_targets'][valid_indices])
+                losses[key] = loss
+                total_loss += self.task_weights[key] * loss
+            else:
+                losses[key] = 0
 
         losses['total'] = total_loss
         return losses

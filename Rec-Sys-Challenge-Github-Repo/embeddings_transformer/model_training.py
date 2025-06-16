@@ -1,8 +1,8 @@
 from dataclasses import asdict
 import torch
+from torch import optim
 from torch import Tensor
 import pytorch_lightning as pl
-import numpy as np
 from typing import Dict, Optional
 from pathlib import Path
 from pytorch_lightning.callbacks import RichProgressBar
@@ -31,6 +31,7 @@ class TransformerModel(pl.LightningModule):
         self.metric_calculator = {
             'event_type': MultiClassMetricCalculator(vocab_sizes['event_type']),
             'category': MultiClassMetricCalculator(vocab_sizes['category']),
+            'sku': MultiClassMetricCalculator(vocab_sizes['sku']),
             'price': MultiClassMetricCalculator(vocab_sizes['price']),
             'url': MultiClassMetricCalculator(vocab_sizes['url']),
         }
@@ -39,19 +40,18 @@ class TransformerModel(pl.LightningModule):
         return self.net(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5,
-                                                               min_lr=1e-6)
+        optimizer = optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, min_lr=1e-6, patience=5)
 
         return {
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': scheduler,
-                'monitor': 'val_total_loss',
+                'monitor': 'val_loss_total',
                 'interval': 'epoch',
                 'frequency': 2
             },
-            'monitor': 'val_total_loss'
+            'monitor': 'val_loss_total'
         }
 
     def setup(self, stage):
@@ -67,7 +67,7 @@ class TransformerModel(pl.LightningModule):
         losses = self.loss_calculator.compute_loss(predictions, y)
 
         for task_name, loss_value in losses.items():
-            self.log(f'train_{task_name}_loss', loss_value, on_step=True, prog_bar=task_name == 'total', logger=True)
+            self.log(f'train_loss_{task_name}', loss_value, on_step=True, prog_bar=task_name == 'total', logger=True)
 
         return losses['total']
 
@@ -80,7 +80,7 @@ class TransformerModel(pl.LightningModule):
         losses = self.loss_calculator.compute_loss(predictions, y)
 
         for task_name, loss_value in losses.items():
-            self.log(f'val_{task_name}_loss', loss_value, prog_bar=task_name in ['total', 'time'], logger=True)
+            self.log(f'val_loss_{task_name}', loss_value, prog_bar=task_name in ['total', 'time'], logger=True)
 
         for key, calc in self.metric_calculator.items():
             valid_indices = y[f'{key}_mask']
@@ -93,25 +93,19 @@ class TransformerModel(pl.LightningModule):
             metric_container = metric.compute()
 
             for metric_name, metric_val in asdict(metric_container).items():
-                self.log(f"{metric_class}_{metric_name}", metric_val, prog_bar=True, logger=True)
+                self.log(f"{metric_name}_{metric_class}", metric_val, prog_bar=True, logger=True)
 
 
 def train_transformer_model(
         data_dir: Path,
         output_dir: Path,
         sequences_path: Path,
-        vocab_path: Path,
         ckpt_path: Optional[Path]
 ):
-    # Load relevant clients
-    relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
-
     # Create dataset and vocab sizes
     print("Loading data...")
     dataset, vocab_sizes = create_data_processing_pipeline(
         data_dir=data_dir,
-        relevant_clients=relevant_clients,
-        vocab_path=vocab_path,
         sequences_path=sequences_path,
         rebuild_vocab=False
     )
@@ -128,7 +122,7 @@ def train_transformer_model(
         # overfit_batches=100,
         callbacks=[
             RichProgressBar(leave=True),
-            ModelCheckpoint(every_n_epochs=3, save_top_k=-1, save_weights_only=False),
+            ModelCheckpoint(every_n_epochs=2, save_top_k=-1, save_weights_only=False),
         ],
     )
     if ckpt_path is None:
@@ -147,16 +141,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=str, required=True)
-    parser.add_argument("--sequences-file", type=str, required=True)
-    parser.add_argument("--vocab-file", type=str, required=True)
+    parser.add_argument("--sequences-path", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument("--checkpoint-path", type=str, required=False)
 
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
-    sequences_path = Path(args.sequences_file)
-    vocab_path = Path(args.vocab_file)
+    sequences_path = Path(args.sequences_path)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     if args.checkpoint_path is not None:
@@ -165,9 +157,8 @@ if __name__ == '__main__':
         ckpt_path = None
 
     train_transformer_model(
-        data_dir=data_dir,  # "../data/original"
-        output_dir=output_dir,  # "../models"
-        sequences_path=sequences_path,  # "../data/sequence/sequences.pkl"
-        vocab_path=vocab_path,  # "../data/sequence/vocabularies.pkl",
+        data_dir=data_dir,
+        output_dir=output_dir,
+        sequences_path=sequences_path,
         ckpt_path=ckpt_path
     )

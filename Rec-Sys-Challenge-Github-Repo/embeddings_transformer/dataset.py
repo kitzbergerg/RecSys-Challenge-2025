@@ -33,6 +33,7 @@ class UserSequenceDataset(Dataset):
         event_type_counts = self.sequences_df['event_type'].value_counts()
         price_counts = self.sequences_df[self.sequences_df['event_type'].isin([4, 5, 6])]['price'].value_counts()
         cat_counts = self.sequences_df[self.sequences_df['event_type'].isin([4, 5, 6])]['category'].value_counts()
+        sku_counts = self.sequences_df[self.sequences_df['event_type'].isin([4, 5, 6])]['sku'].value_counts()
         url_counts = self.sequences_df[self.sequences_df['event_type'] == 7]['url'].value_counts()
 
         self.class_stats = {
@@ -40,6 +41,11 @@ class UserSequenceDataset(Dataset):
                 'learnable': set(cat_counts[cat_counts >= 10].index),
                 'common': set(cat_counts[cat_counts >= 100].index),
                 'rare': set(cat_counts[cat_counts < 10].index)
+            },
+            'sku': {
+                'learnable': set(sku_counts[sku_counts >= 300].index),
+                'common': set(sku_counts[sku_counts >= 500].index),
+                'rare': set(sku_counts[sku_counts < 300].index)
             },
             'url': {
                 'learnable': set(url_counts[url_counts >= 750].index),
@@ -62,6 +68,13 @@ class UserSequenceDataset(Dataset):
         for idx, w in cat_weights.items():
             cat_weight_tensor[idx] = w
 
+        # Compute class weights for sku
+        sku_weights = 1.0 / np.log1p(sku_counts + 1)  # log(1 + freq) smoothing
+        sku_weights = sku_weights / sku_weights.max()  # Normalize to [0, 1]
+        sku_weight_tensor = torch.ones(vocab_sizes['sku'])
+        for idx, w in sku_weights.items():
+            sku_weight_tensor[idx] = w
+
         # Compute class weights for URL
         url_weights = 1.0 / np.log1p(url_counts + 1)
         url_weights = url_weights / url_weights.max()
@@ -72,6 +85,7 @@ class UserSequenceDataset(Dataset):
         self.class_weights = {
             'event_type': event_type_weight_tensor,
             'category': cat_weight_tensor,
+            'sku': sku_weight_tensor,
             'url': url_weight_tensor
         }
 
@@ -97,18 +111,15 @@ class UserSequenceDataset(Dataset):
     def __getitem__(self, idx):
         client_id = self.client_ids[idx]
         group = self.client_groups.get_group(client_id).sort_values('timestamp')
-
-        # Truncate if too long
-        if len(group) > self.max_seq_length:
-            group = group.iloc[-self.max_seq_length:]
-
         seq_len = len(group)
+        assert seq_len <= MAX_SEQUENCE_LENGTH
 
         # Initialize tensors
         sequence = {
             'client_id': client_id,
             'event_type': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'category': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
+            'sku': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'price': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'url': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.long),
             'product_name': torch.zeros(MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM, dtype=torch.float32),
@@ -116,7 +127,7 @@ class UserSequenceDataset(Dataset):
             'time_delta': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.float32),
             'mask': torch.zeros(MAX_SEQUENCE_LENGTH, dtype=torch.bool),  # True for valid positions
         }
-        tensor_fields = ['event_type', 'category', 'price', 'url', 'time_delta']
+        tensor_fields = ['event_type', 'category', 'sku', 'price', 'url', 'time_delta']
         for field in tensor_fields:
             sequence[field][:seq_len] = torch.as_tensor(group[field].values)
         for emb_field in ['product_name', 'search_query']:
@@ -128,6 +139,8 @@ class UserSequenceDataset(Dataset):
             'event_type_mask': False,
             'category_targets': -1,
             'category_mask': False,
+            'sku_targets': -1,
+            'sku_mask': False,
             'price_targets': -1,
             'price_mask': False,
             'url_targets': -1,
@@ -151,12 +164,19 @@ class UserSequenceDataset(Dataset):
 
         if original_event_type in [4, 5, 6]:
             is_learnable = sequence['category'][mask_pos].item() in self.class_stats['category']['learnable']
-            mask_prob = 0.5 if is_learnable else 0.05
+            mask_prob = 0.4 if is_learnable else 0.05
             if random.random() < mask_prob:
                 # For product events, we can also predict category
                 targets['category_targets'] = sequence['category'][mask_pos].item()
                 targets['category_mask'] = True
                 sequence['category'][mask_pos] = 2
+            is_learnable = sequence['sku'][mask_pos].item() in self.class_stats['sku']['learnable']
+            mask_prob = 0.3 if is_learnable else 0.05
+            if random.random() < mask_prob:
+                # For product events, we can also predict sku
+                targets['sku_targets'] = sequence['sku'][mask_pos].item()
+                targets['sku_mask'] = True
+                sequence['sku'][mask_pos] = 2
             if random.random() < 0.5:
                 # For product events, we can also predict price
                 targets['price_targets'] = sequence['price'][mask_pos].item()
@@ -182,7 +202,7 @@ class UserSequenceDataset(Dataset):
             sequence['time_delta'][mask_pos] = -1  # not categorical and 0 is for padding
 
         if seq_len > 5 and random.random() < 0.2:
-            # zero elements around mask so transformer needs to learn general patterns, not just local event around mask
+            # zero elements around mask so transformer needs to learn general and not just local patterns
             mask_start = random.randint(0, min(seq_len // 6, 3))
             mask_end = random.randint(0, min(seq_len // 6, 3))
             for i in range(max(mask_pos - mask_start, 0), min(mask_pos + mask_end + 1, seq_len)):
@@ -196,6 +216,7 @@ def mask_event(sequence, idx):
     # special token for missing context
     sequence['event_type'][idx] = 3
     sequence['category'][idx] = 3
+    sequence['sku'][idx] = 3
     sequence['price'][idx] = 3
     sequence['url'][idx] = 3
     sequence['product_name'][idx] = torch.zeros(TEXT_EMB_DIM, dtype=torch.float32)

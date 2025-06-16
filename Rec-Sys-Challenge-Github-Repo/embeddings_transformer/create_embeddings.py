@@ -1,11 +1,29 @@
 from pathlib import Path
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from embeddings_transformer.data_processor import create_data_processing_pipeline
-from embeddings_transformer.dataset import collate_fn
+from embeddings_transformer.data_processor import EventSequenceProcessor, read_filtered_parquet
+from embeddings_transformer.dataset import collate_fn, UserSequenceDataset
 from embeddings_transformer.model_training import TransformerModel
+
+
+def load_embedding_dataset(
+        data_dir: Path,
+        vocab_path: Path,
+        sequences_path: Path,
+) -> UserSequenceDataset:
+    relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
+
+    processor = EventSequenceProcessor()
+    processor.load_vocabularies(vocab_path / "vocabularies.pkl")
+    sequences = read_filtered_parquet(sequences_path / "sequences_full.pkl", relevant_clients)
+
+    vocab_sizes = processor.get_vocab_sizes()
+    dataset = UserSequenceDataset(sequences, vocab_sizes, disable_masking=True)
+
+    return dataset
 
 
 def generate_embeddings(
@@ -15,15 +33,7 @@ def generate_embeddings(
         vocab_path: Path,
         ckpt_path: Path
 ):
-    relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
-    dataset, _ = create_data_processing_pipeline(
-        data_dir=data_dir,
-        relevant_clients=relevant_clients,
-        vocab_path=vocab_path,
-        sequences_path=sequences_path,
-        rebuild_vocab=False
-    )
-    dataset.disable_masking = True
+    dataset = load_embedding_dataset(data_dir, vocab_path, sequences_path)
     dataloader = DataLoader(dataset, 128, num_workers=8, collate_fn=collate_fn)
     model = TransformerModel.load_from_checkpoint(ckpt_path)
     model.eval()
