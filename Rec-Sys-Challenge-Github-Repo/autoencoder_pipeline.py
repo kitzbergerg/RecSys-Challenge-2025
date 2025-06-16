@@ -21,27 +21,27 @@ class Config:
 
     DATA_DIR = "/home/jovyan/shared/194.035-2025S/data/group_project/data_new/"
     CLIENT_IDS_PATH = os.path.join(DATA_DIR, "input/relevant_clients.npy") 
-    OUTPUT_DIR = "./output_deep"
+    OUTPUT_DIR = "./output_deep_100ep"
 
     SAVE_RAW_FEATURES = True
-    SAVE_RAW_FEATURES_DIR = "./raw_features"
+    SAVE_RAW_FEATURES_DIR = "./raw_features_2"
     EMBEDDINGS_OUTPUT_PATH = os.path.join(OUTPUT_DIR, "embeddings.npy")
     IS_TEST_RUN = False
     TEST_SAMPLE_SIZE = 2000
    
-    STATS_NUM_DAYS = [2, 7, 30, 90]
+    STATS_NUM_DAYS = [1, 2, 7, 30, 90]
     STATS_TOP_N = 10
 
-    LOAD_FROM_EXISTING_EMBEDDINGS = False
-    INPUT_FEATURES_DIR = "./embeddings_tobi"
+    LOAD_FROM_EXISTING_EMBEDDINGS = True
+    INPUT_FEATURES_DIR = "./raw_features_2"
     
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
     USE_LR_SCHEDULING = True
     EMBEDDING_DIM = 180
-    AE_EPOCHS = 52
+    AE_EPOCHS = 152
     AE_BATCH_SIZE = 256
-    AE_LEARNING_RATE = 1e-3 #common default value to start with, but with scheduling I might now set it to 1e-2?
+    AE_LEARNING_RATE = 0.001 
 
 
 
@@ -94,12 +94,12 @@ class Autoencoder_deeper(nn.Module):
     def __init__(self, input_dim, embedding_dim):
         super(Autoencoder_deeper, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 256),       #wider than before
+            nn.Linear(input_dim, 256),    #todo: test with wider input   
             nn.ReLU(),
             nn.Linear(256, 256),             
             nn.ReLU(),
             nn.Dropout(0.2),                 
-            nn.Linear(256, embedding_dim)    #bottleneck
+            nn.Linear(256, embedding_dim)   
         )
         
         self.decoder = nn.Sequential(
@@ -108,6 +108,40 @@ class Autoencoder_deeper(nn.Module):
             nn.Linear(256, 256),             
             nn.ReLU(),
             nn.Linear(256, input_dim),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return decoded
+
+    def get_embeddings(self, x):
+        
+        return self.encoder(x) # uses the encoder to get the final embeddings here
+
+
+class Autoencoder_wider_deeper(nn.Module):
+    def __init__(self, input_dim, embedding_dim):
+        super(Autoencoder_wider_deeper, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, 512),   #wider input layer
+            nn.ReLU(),
+            
+
+            
+            nn.Linear(512, 256),             
+            nn.ReLU(),
+            nn.Dropout(0.2),                 
+            nn.Linear(256, embedding_dim)   
+        )
+        
+        self.decoder = nn.Sequential(
+            nn.Linear(embedding_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 512),             
+            nn.ReLU(),
+            nn.Linear(512, input_dim),
             nn.Sigmoid()
         )
 
@@ -210,8 +244,8 @@ def main():
     
                 raw_feat_dir = Path(Config.SAVE_RAW_FEATURES_DIR)
                 raw_feat_dir.mkdir(parents=True, exist_ok=True) 
-                embeddings_path = output_dir / "embeddings.npy"
-                client_ids_path = output_dir / "client_ids.npy"
+                embeddings_path = raw_feat_dir / "embeddings.npy"
+                client_ids_path = raw_feat_dir / "client_ids.npy"
                 client_ids_to_save = relevant_client_ids #should this be client_ids_from_agg? 
         
                 
@@ -235,14 +269,24 @@ def main():
     
 
         all_user_features_raw = np.load(input_embeddings_path)
+        client_ids_raw = np.load(input_clients_path)
         # Fill any nans, from reindexing or calculations, unsure if necessary here?
         #all_user_features_filled = ordered_features_df.fillna(0).values
         
         relevant_client_ids = np.load(input_clients_path)
         client_ids_to_save = relevant_client_ids
-        print(f"  - Loaded raw features of shape: {all_user_features_raw.shape}")
+        print(f"  - Loaded raw features of shape: {all_user_features_raw.shape} FROM {input_embeddings_path}")
         assert len(all_user_features_raw) == len(client_ids_to_save), "Mismatch between embeddings and client_ids length!"
-        all_user_features_filled = all_user_features_raw #not actually, just a hack so the script afterwards works with it, could consider doing away with keeping them unfilled at all to save on ram a bit
+
+
+
+        raw_features_df = pd.DataFrame(all_user_features_raw, index=client_ids_raw)
+        #IMPORTANT!!!!!! Align rows to the official client_ids.npy order.
+        ordered_features_df = raw_features_df.reindex(relevant_client_ids)
+        
+        # Fill any nans, from reindexing or calculations
+        all_user_features_filled = ordered_features_df.fillna(0).values
+        #all_user_features_filled = all_user_features_raw 
         
     
     # Scale features to be between 0 and 1 for the autoencoder
@@ -262,7 +306,7 @@ def main():
     input_dim_ae = all_user_features_scaled.shape[1]
 
     if(Config.USE_DEEPER_AUTOENCODER):
-        autoencoder = Autoencoder_deeper(input_dim_ae, Config.EMBEDDING_DIM).to(device)
+        autoencoder = Autoencoder_wider_deeper(input_dim_ae, Config.EMBEDDING_DIM).to(device)
         print("Using the deeper autoencoder model, one extra layer babyyy")
     else:  
         autoencoder = Autoencoder(input_dim_ae, Config.EMBEDDING_DIM).to(device)
@@ -270,7 +314,7 @@ def main():
     optimizer = optim.Adam(autoencoder.parameters(), lr=Config.AE_LEARNING_RATE)
     # try scheduling the LR: https://stackoverflow.com/questions/63108131/pytorch-schedule-learning-rate 
     if(Config.USE_LR_SCHEDULING):
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5, verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=3, verbose=True)
         print("Using LR Scheduling")
     
     autoencoder.train()
