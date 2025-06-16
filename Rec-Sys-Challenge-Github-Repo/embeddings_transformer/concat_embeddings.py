@@ -1,11 +1,10 @@
 import numpy as np
-import torch
 
-client_ids = np.load("../results/transformer/v1/client_ids.npy")
-embeddings = np.load("../results/transformer/v1/embeddings.npy")
+client_ids = np.load("../results/transformer/v2/client_ids.npy")
+embeddings = np.load("../results/transformer/v2/embeddings.npy")
 
-client_ids_other = np.load("../results/vinzent/client_ids.npy")
-embeddings_other = np.load("../results/vinzent/embeddings.npy")
+client_ids_other = np.load("../results/embeddings_deep_autoencoder/client_ids.npy")
+embeddings_other = np.load("../results/embeddings_deep_autoencoder/embeddings.npy")
 
 print(client_ids.shape)
 print(embeddings.shape)
@@ -36,5 +35,5 @@ assert client_ids_concat.shape[0] == embeddings_concat.shape[0]
 assert embeddings.shape[1] + embeddings_other.shape[1] == embeddings_concat.shape[1]
 
 # Save the aligned client_ids and combined embeddings
-np.save("../results/transformer/v1/combined/client_ids.npy", client_ids_concat)
-np.save("../results/transformer/v1/combined/embeddings.npy", embeddings_concat)
+np.save("../results/transformer_concat/client_ids.npy", client_ids_concat)
+np.save("../results/transformer_concat/embeddings.npy", embeddings_concat)

@@ -1,14 +1,13 @@
 ## Run
 
 ```shell
-DATA_DIR=../../../../shared/194.035-2025S/data/group_project/data_new/
-python -m embeddings_transformer.data_processor --data-dir $DATA_DIR --output-dir ../data/sequence/ --rebuild-vocab
-python -m embeddings_transformer.model --data-dir $DATA_DIR --output-dir ../models/ --vocab-file ../data/sequence/vocabularies.pkl --sequences-file ../data/sequence/sequences.pkl
+python -m embeddings_transformer.data_processor --data-dir ../data/original/ --output-dir ../data/sequence/
+python -m embeddings_transformer.model_training --data-dir ../data/original/ --output-dir ../models/ --sequences-path ../data/sequence/
 
-python -m embeddings_transformer.create_embeddings --data-dir ../data/original/ --embeddings-dir ../results/transformer/v1/ --vocab-file ../data/sequence/vocabularies.pkl --sequences-file ../data/sequence/sequences.pkl --checkpoint-path lightning_logs/version_1/checkpoints/epoch=47-step=337536.ckpt
+python -m embeddings_transformer.create_embeddings --data-dir ../data/original/ --embeddings-dir ../results/transformer/v2/ --sequences-path ../data/sequence/ --checkpoint-path lightning_logs/version_3/checkpoints/epoch=29-step=210960.ckpt
 python -m validator.run --data-dir ../data/original/ --embeddings-dir ../results/transformer/v1/
 
-python -m training_pipeline.train --data-dir ../data/original/ --embeddings-dir ../results/transformer/v1/ --tasks churn propensity_category propensity_sku --log-name baseline --accelerator gpu --devices 0 --disable-relevant-clients-check
+python -m training_pipeline.train --data-dir ../data/original/ --embeddings-dir ../results/transformer/v2/ --tasks churn propensity_category propensity_sku --log-name baseline --accelerator gpu --devices 0 --disable-relevant-clients-check
 ```
 
 ## Dataset Statistics

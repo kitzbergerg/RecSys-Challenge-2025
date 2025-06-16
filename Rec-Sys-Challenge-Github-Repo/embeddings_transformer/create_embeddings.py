@@ -11,18 +11,16 @@ from embeddings_transformer.model_training import TransformerModel
 
 def load_embedding_dataset(
         data_dir: Path,
-        vocab_path: Path,
         sequences_path: Path,
 ) -> UserSequenceDataset:
-    relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
-
     processor = EventSequenceProcessor()
-    processor.load_vocabularies(vocab_path / "vocabularies.pkl")
-    sequences = read_filtered_parquet(sequences_path / "sequences_full.pkl", relevant_clients)
-
+    processor.load_vocabularies(sequences_path / "vocabularies.pkl")
     vocab_sizes = processor.get_vocab_sizes()
-    dataset = UserSequenceDataset(sequences, vocab_sizes, disable_masking=True)
 
+    relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
+    sequences = read_filtered_parquet(sequences_path / "sequences_full.parquet", relevant_clients)
+
+    dataset = UserSequenceDataset(sequences, vocab_sizes, disable_masking=True)
     return dataset
 
 
@@ -30,10 +28,9 @@ def generate_embeddings(
         data_dir: Path,
         embeddings_dir: Path,
         sequences_path: Path,
-        vocab_path: Path,
         ckpt_path: Path
 ):
-    dataset = load_embedding_dataset(data_dir, vocab_path, sequences_path)
+    dataset = load_embedding_dataset(data_dir, sequences_path)
     dataloader = DataLoader(dataset, 128, num_workers=8, collate_fn=collate_fn)
     model = TransformerModel.load_from_checkpoint(ckpt_path)
     model.eval()
@@ -63,16 +60,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=str, required=True)
-    parser.add_argument("--sequences-file", type=str, required=True)
-    parser.add_argument("--vocab-file", type=str, required=True)
+    parser.add_argument("--sequences-path", type=str, required=True)
     parser.add_argument("--embeddings-dir", type=str, required=True)
     parser.add_argument("--checkpoint-path", type=str, required=False)
 
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
-    sequences_path = Path(args.sequences_file)
-    vocab_path = Path(args.vocab_file)
+    sequences_path = Path(args.sequences_path)
     embeddings_dir = Path(args.embeddings_dir)
     embeddings_dir.mkdir(parents=True, exist_ok=True)
     if args.checkpoint_path is not None:
@@ -84,6 +79,5 @@ if __name__ == '__main__':
         data_dir=data_dir,
         embeddings_dir=embeddings_dir,
         sequences_path=sequences_path,
-        vocab_path=vocab_path,
         ckpt_path=ckpt_path
     )

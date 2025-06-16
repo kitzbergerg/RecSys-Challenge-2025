@@ -111,7 +111,8 @@ def train_transformer_model(
     )
     class_weights = dataset.class_weights
 
-    dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1])
+    dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [0.9, 0.1],
+                                                                 generator=torch.Generator().manual_seed(42))
     data = DataModule(dataset_train, dataset_valid, 128, 8)
 
     print("Training model...")
