@@ -10,7 +10,16 @@ To use our implementation, the following steps are needed.
 To run the implementation locally, just start the run_locally.sh file. The embeddings will be created based on the split dataset and the training on the new embeddings is executed.
 
 ### Create embeddings on full dataset
-To create the embeddings on the full set, start run.sh in shell. The embeddings will be stored in an embeddings folder.
+To create the embeddings on the full set, start run_standard_embeddings.sh in shell. The embeddings will be stored in an embeddings folder.
+
+### Create embeddings using the autoencoder:
+
+Run run_autoencoder.sh, the python file also accepts --data-dir and --embeddings-dir CLI arguments for custom in and out locations.
+If you open the Rec-Sys-Challenge-Github-Repo/autoencoder_pipeline.py file, you'll find a Config class at the top where you can configure a bunch of parameters as well.
+
+
+
+
 
 
 ## 

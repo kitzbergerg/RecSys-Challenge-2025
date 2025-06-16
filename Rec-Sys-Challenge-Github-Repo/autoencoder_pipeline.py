@@ -32,7 +32,7 @@ class Config:
     STATS_NUM_DAYS = [1, 2, 7, 30, 90]
     STATS_TOP_N = 10
 
-    LOAD_FROM_EXISTING_EMBEDDINGS = True
+    LOAD_FROM_EXISTING_EMBEDDINGS = False
     INPUT_FEATURES_DIR = "./raw_features_2"
     
     # Autoencoder params
