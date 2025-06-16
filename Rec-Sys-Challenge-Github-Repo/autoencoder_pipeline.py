@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
-
+import argparse
 
 """
 I experimented with this based on loose tutorials and adapting them to our calculators feature interface. The config class up top is very handy for having all of the config in one place, due to our development happening in parralel the different methods are a bit diffuse in terms of implementation unity.
@@ -39,7 +39,7 @@ class Config:
     USE_DEEPER_AUTOENCODER = True
     USE_LR_SCHEDULING = True
     EMBEDDING_DIM = 180
-    AE_EPOCHS = 152
+    AE_EPOCHS = 128
     AE_BATCH_SIZE = 256
     AE_LEARNING_RATE = 0.001 
 
@@ -126,12 +126,15 @@ class Autoencoder_wider_deeper(nn.Module):
         super(Autoencoder_wider_deeper, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, 512),   #wider input layer
+            nn.BatchNorm1d(512),
             nn.ReLU(),
-            
+            nn.Dropout(0.2),
 
             
             nn.Linear(512, 256),             
             nn.ReLU(),
+            #nn.Linear(256, 256),             
+            #nn.ReLU(),
             nn.Dropout(0.2),                 
             nn.Linear(256, embedding_dim)   
         )
@@ -139,6 +142,8 @@ class Autoencoder_wider_deeper(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(embedding_dim, 256),
             nn.ReLU(),
+            #nn.Linear(512, 256),             
+            #nn.ReLU(),
             nn.Linear(256, 512),             
             nn.ReLU(),
             nn.Linear(512, input_dim),
@@ -156,9 +161,20 @@ class Autoencoder_wider_deeper(nn.Module):
 
     
 
-def main():
+def main(params):
 
-    
+    data_dir_arg = params.data_dir
+
+    embeddings_dir_arg = params.embeddings_dir
+
+    if(data_dir_arg):
+        Config.DATA_DIR = data_dir_arg
+    print(f"configured data dir to: {Config.DATA_DIR}")
+
+    if(embeddings_dir_arg): 
+        Config.OUTPUT_DIR = embeddings_dir_arg
+    print(f"configured embeddings dir to: {Config.OUTPUT_DIR}")
+
    
     print("\n Loading and pre-processing data...")
     print("USING INPUT DATA FOLDER: " + Config.DATA_DIR)
@@ -306,7 +322,7 @@ def main():
     input_dim_ae = all_user_features_scaled.shape[1]
 
     if(Config.USE_DEEPER_AUTOENCODER):
-        autoencoder = Autoencoder_wider_deeper(input_dim_ae, Config.EMBEDDING_DIM).to(device)
+        autoencoder = Autoencoder_deeper(input_dim_ae, Config.EMBEDDING_DIM).to(device)
         print("Using the deeper autoencoder model, one extra layer babyyy")
     else:  
         autoencoder = Autoencoder(input_dim_ae, Config.EMBEDDING_DIM).to(device)
@@ -386,4 +402,19 @@ def main():
     print(f"{client_ids_path}")
 
 if __name__ == "__main__":
-    main()
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        required=False,
+        help="Directory with input and target data – produced by data_utils.split_data",
+    )
+    parser.add_argument(
+        "--embeddings-dir",
+        type=str,
+        required=False,
+        help="Directory where to store generated embeddings",
+    )
+    params = parser.parse_args()
+    main(params=params)
