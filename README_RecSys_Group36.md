@@ -3,6 +3,9 @@
 ## Introduction
 The goal was to create Universal Behavioral Profile, which is based on provided data (purchases, add to cart, remove from cart, page visits and search query). This data is extracted and used to create a set of features for each client this is a user representation which is then used for training a model for multiple prediction tasks.
 
+## Leaderboard embeddings
+The embeddings uploaded in the leaderboard can be found in the embeddings folder. They were obtained using the autoencoder model.
+
 ## Execution
 To use our implementation, the following steps are needed. The best results so far were obtained using the autoencoder.
 
@@ -17,5 +20,6 @@ Run run.sh, the python file also accepts --data-dir and --embeddings-dir CLI arg
 If you open the Rec-Sys-Challenge-Github-Repo/autoencoder_pipeline.py file, you'll find a Config class at the top where you can configure a bunch of parameters as well.
 
 ### Create embeddings using the contrastive learning
+
 
 ### Create embeddings using transformer
