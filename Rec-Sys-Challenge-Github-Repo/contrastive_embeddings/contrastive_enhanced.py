@@ -9,13 +9,10 @@ import random
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-# REMOVED: from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import normalize
 from sklearn.decomposition import PCA
 import joblib
 from enum import Enum
-
-# NEW IMPORTS FOR DIRECT HUGGING FACE TRANSFORMERS USAGE
 from transformers import AutoModel, AutoTokenizer
 
 
@@ -28,13 +25,12 @@ class EventTypes(Enum):
     SEARCH_QUERY = "search_query"
 
 EVENT_TYPE_EMB_SIZE = 5  # One-hot encoding size
-HASHED_FEATURE_SIZE = 16 # Increased from 8 to 16 for richer structured features
+HASHED_FEATURE_SIZE = 16 
 STRUCTURED_EVENT_DIM = EVENT_TYPE_EMB_SIZE + HASHED_FEATURE_SIZE
-# MODIFIED: TEXT_EMBEDDING_DIM for all-MiniLM-L6-v2
-TEXT_EMBEDDING_DIM = 384  # SBERT all-MiniLM-L6-v2 embedding size
-REDUCED_TEXT_DIM = 128    # After dimensionality reduction
-SESSION_GAP_SECONDS = 1800  # 30 minutes
-DECAY_LAMBDA = 0.1          # Time decay factor (can be tuned further)
+TEXT_EMBEDDING_DIM = 384  
+REDUCED_TEXT_DIM = 128
+SESSION_GAP_SECONDS = 1800  
+DECAY_LAMBDA = 0.1          
 
 # Utils
 def multi_dim_hash(s: str, dim=HASHED_FEATURE_SIZE) -> list:
@@ -455,8 +451,6 @@ def merge_features(structured_emb, text_emb):
     structured_zero_vec = np.zeros(128, dtype=np.float32) 
     text_zero_vec = np.zeros(REDUCED_TEXT_DIM, dtype=np.float32)
     
-    # This calculation should reflect the actual output dimension of the merged vector
-    # Check if structured_emb has any actual entries to determine its dimension
     if structured_emb:
         sample_structured_emb_dim = next(iter(structured_emb.values())).shape[0]
     else:
@@ -474,7 +468,6 @@ def merge_features(structured_emb, text_emb):
     merged = {}
     
     for client in tqdm(all_clients, desc="Merging features"):
-        # Use .get() with the appropriate default zero vector dimension
         struct = structured_emb.get(client, np.zeros(sample_structured_emb_dim, dtype=np.float32))
         text = text_emb.get(client, np.zeros(sample_text_emb_dim, dtype=np.float32))
         merged[client] = np.concatenate([struct, text])
@@ -589,18 +582,16 @@ def main(data_dir, embeddings_dir):
         else:
             print(f"Loading Hugging Face AutoModel and AutoTokenizer (all-MiniLM-L6-v2)...")
             try:
-                # MODIFIED: Load AutoModel and AutoTokenizer instead of SentenceTransformer
                 sbert_tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
                 sbert_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2").to(device)
             except Exception as e:
                 print(f"Error loading Hugging Face model: {e}. Check internet connection or model name.")
                 print("Skipping text embedding generation.")
                 sbert_model = None
-                sbert_tokenizer = None # Ensure tokenizer is also None if model fails
+                sbert_tokenizer = None 
                 
             if sbert_model and sbert_tokenizer:
                 print("Extracting text embeddings...")
-                # MODIFIED: Pass tokenizer and model to extract_text_embeddings
                 text_embeddings_full = extract_text_embeddings(text_df, sbert_tokenizer, sbert_model, text_column="text", device=device)
                 
                 if text_embeddings_full:
@@ -623,9 +614,8 @@ def main(data_dir, embeddings_dir):
     final_client_ids = []
     final_embeddings_list = []
 
-    # Dynamically determine the expected combined dimension based on actual data or fallbacks
-    current_structured_dim = 128 # Default output_dim of EnhancedContrastiveModel
-    current_text_dim = REDUCED_TEXT_DIM # Default REDUCED_TEXT_DIM
+    current_structured_dim = 128 
+    current_text_dim = REDUCED_TEXT_DIM 
     
     if structured_embeddings:
         current_structured_dim = next(iter(structured_embeddings.values())).shape[0]
@@ -638,7 +628,6 @@ def main(data_dir, embeddings_dir):
         clients_to_process = relevant_clients
         print(f"Saving embeddings for {len(clients_to_process)} clients from the 'relevant_clients' list.")
         for client_id in tqdm(clients_to_process, desc="Collecting relevant client embeddings"):
-            # Ensure the zero vector matches the dynamically determined expected_combined_dim
             emb = merged_embeddings.get(client_id, np.zeros(expected_combined_dim, dtype=np.float32))
             final_client_ids.append(client_id)
             final_embeddings_list.append(emb)
