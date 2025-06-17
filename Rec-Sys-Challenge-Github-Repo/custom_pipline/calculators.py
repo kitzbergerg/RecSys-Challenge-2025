@@ -321,7 +321,7 @@ class TimeEventDiffCalculator(Calculator):
 class MonthDistributionCalculator(Calculator):
     @property
     def features_size(self) -> int:
-        return 12  # one column per month (Jan to Dec)
+        return 12  #one column per month
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
         distribution = np.zeros(12, dtype=EMBEDDINGS_DTYPE)
@@ -330,7 +330,7 @@ class MonthDistributionCalculator(Calculator):
 
         months = events["timestamp"].dt.month  # 1 to 12
         counts = months.value_counts(normalize=True).sort_index()
-        distribution[counts.index.to_numpy() - 1] = counts.to_numpy()  # subtract 1 for zero-based indexing
+        distribution[counts.index.to_numpy() - 1] = counts.to_numpy() 
 
         return distribution
 
@@ -340,7 +340,7 @@ class PageVisitCalculator(Calculator):
         return 3
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
-        # check only on unique urls in page_visit events
+        #check only on unique urls in page_visit events
         count = len(events)
         if events.empty or "url" not in events.columns:
             unique_urls = 0.0
@@ -363,7 +363,7 @@ class QueryCountCalculator(Calculator):
         return 2
 
     def compute_features(self, events: pd.DataFrame) -> np.ndarray:
-        # check only on unique query in page_visit events
+        #check only on unique query in page_visit events
         count = len(events)
         if events.empty or "query" not in events.columns:
             unique_queries = 0.0
