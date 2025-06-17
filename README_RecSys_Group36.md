@@ -4,8 +4,8 @@
 The goal was to create Universal Behavioral Profile, which is based on provided data (purchases, add to cart, remove from cart, page visits and search query). This data is extracted and used to create a set of features for each client this is a user representation which is then used for training a model for multiple prediction tasks.
 
 ## Leaderboard embeddings
-The embeddings uploaded in the leaderboard can be found in the submission folder. They were obtained using the autoencoder model (the same which can be run under run.sh)
-For the other models, the last available embeddings are provided in the respective folders within embeddings_provided.
+The embeddings uploaded in the leaderboard can be found in the submission folder (gitlab). They were obtained using the autoencoder model (the same which can be run under run.sh)
+For the other models, the last available embeddings are provided in the respective folders within embeddings_provided (jupyerhub)
 
 ## Execution
 To use our implementation, the following steps are needed. The best results so far were obtained using the autoencoder.
