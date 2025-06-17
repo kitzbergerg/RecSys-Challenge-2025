@@ -274,7 +274,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=str, required=True)
     parser.add_argument("--sequences-path", type=str, required=True)
-    parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument("--checkpoint-path", type=str, required=False)
     parser.add_argument("--task", type=str, required=False)
 
@@ -282,8 +281,6 @@ if __name__ == '__main__':
 
     data_dir = Path(args.data_dir)
     sequences_path = Path(args.sequences_path)
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     if args.checkpoint_path is not None:
         ckpt_path = Path(args.checkpoint_path)
     else:
