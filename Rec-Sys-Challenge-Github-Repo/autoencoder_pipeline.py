@@ -23,7 +23,7 @@ class Config:
     CLIENT_IDS_PATH = os.path.join(DATA_DIR, "input/relevant_clients.npy") 
     OUTPUT_DIR = "./output_deep_100ep"
 
-    SAVE_RAW_FEATURES = True
+    SAVE_RAW_FEATURES = False
     SAVE_RAW_FEATURES_DIR = "./raw_features_2"
     EMBEDDINGS_OUTPUT_PATH = os.path.join(OUTPUT_DIR, "embeddings.npy")
     IS_TEST_RUN = False
@@ -32,14 +32,14 @@ class Config:
     STATS_NUM_DAYS = [1, 2, 7, 30, 90]
     STATS_TOP_N = 10
 
-    LOAD_FROM_EXISTING_EMBEDDINGS = True
+    LOAD_FROM_EXISTING_EMBEDDINGS = False
     INPUT_FEATURES_DIR = "./raw_features_2"
     
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
     USE_LR_SCHEDULING = True
     EMBEDDING_DIM = 180
-    AE_EPOCHS = 100
+    AE_EPOCHS = 120
     AE_BATCH_SIZE = 256
     AE_LEARNING_RATE = 1e-3
 
