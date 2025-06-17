@@ -63,3 +63,6 @@ To execute the script, simply run it from your terminal:
 ```bash
 run_transformer.sh
 ```
+
+## Metrics local training
+In the `metrics.ipynb` the auroc, diversity, novelty are visible for the local training of the embeddings with split.    
