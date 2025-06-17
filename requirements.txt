@@ -280,3 +280,4 @@ yarl==1.18.3
 tf-keras
 sentence-transformers
 scikit-learn
+ipython
