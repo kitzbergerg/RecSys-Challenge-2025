@@ -16,7 +16,7 @@ pip install -r requirements.txt
 echo "Changing to the Rec-Sys-Challenge-Github-Repo directory..."
 cd Rec-Sys-Challenge-Github-Repo
 
-echo "Running contrastive pipeline..."
+echo "Running calculators pipeline..."
 python -m custom_pipline.create_embeddings --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ --embeddings-dir ../embeddings
 
 echo "Running validator..."
