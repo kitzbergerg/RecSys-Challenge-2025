@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 import pickle
 from collections import defaultdict
@@ -8,6 +8,7 @@ import re
 
 from embeddings_transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
 from embeddings_transformer.dataset import UserSequenceDataset
+from embeddings_transformer.dataset_contrastive import UserSequenceContrastiveDataset
 
 
 class EventSequenceProcessor:
@@ -338,6 +339,7 @@ def calculate_statistics(df: pd.DataFrame):
 def create_data_processing_pipeline(
         data_dir: Path,
         sequences_path: Path,
+        task: Optional[str],
         rebuild_vocab: bool = False,
         max_seq_length: int = MAX_SEQUENCE_LENGTH
 ) -> Tuple[UserSequenceDataset, Dict[str, int]]:
@@ -393,7 +395,13 @@ def create_data_processing_pipeline(
 
     # Create dataset
     vocab_sizes = processor.get_vocab_sizes()
-    dataset = UserSequenceDataset(sequences, vocab_sizes, max_seq_length)
+    if not task or task == 'reconstruction':
+        dataset = UserSequenceDataset(sequences, vocab_sizes, max_seq_length)
+    elif task == 'contrastive':
+        dataset = UserSequenceContrastiveDataset(sequences, max_seq_length)
+    else:
+        print(f"WARNING: no such task {task}")
+        exit(1)
 
     return dataset, vocab_sizes
 

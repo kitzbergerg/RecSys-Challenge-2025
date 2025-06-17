@@ -1,11 +1,12 @@
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
 from embeddings_transformer.data_processor import EventSequenceProcessor, read_filtered_parquet
-from embeddings_transformer.dataset import collate_fn, UserSequenceDataset
+from embeddings_transformer.dataset import reconstructive_collate_fn, UserSequenceDataset
 from embeddings_transformer.model_training import TransformerModel
 
 
@@ -17,8 +18,13 @@ def load_embedding_dataset(
     processor.load_vocabularies(sequences_path / "vocabularies.pkl")
     vocab_sizes = processor.get_vocab_sizes()
 
-    relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
-    sequences = read_filtered_parquet(sequences_path / "sequences_full.parquet", relevant_clients)
+    rel_clients_file = sequences_path / f"sequences_rel_clients.parquet"
+    if not rel_clients_file.exists():
+        relevant_clients = np.load(data_dir / "input" / "relevant_clients.npy")
+        sequences = read_filtered_parquet(sequences_path / "sequences_full.parquet", relevant_clients)
+        sequences.to_parquet(rel_clients_file)
+    else:
+        sequences = pd.read_parquet(rel_clients_file)
 
     dataset = UserSequenceDataset(sequences, vocab_sizes, disable_masking=True)
     return dataset
@@ -31,7 +37,7 @@ def generate_embeddings(
         ckpt_path: Path
 ):
     dataset = load_embedding_dataset(data_dir, sequences_path)
-    dataloader = DataLoader(dataset, 128, num_workers=8, collate_fn=collate_fn)
+    dataloader = DataLoader(dataset, 128, num_workers=0, collate_fn=reconstructive_collate_fn)
     model = TransformerModel.load_from_checkpoint(ckpt_path)
     model.eval()
 
