@@ -21,5 +21,12 @@ If you open the Rec-Sys-Challenge-Github-Repo/autoencoder_pipeline.py file, you'
 
 ### Create embeddings using the contrastive learning
 
+The `run_contrastive.sh` script sets up the prerequisites, generates client embeddings using the `contrastive_enhanced.py` script, and then validates the generated embeddings.
+
+To execute the script, simply run it from your terminal:
+
+```bash
+./run_contrastive.sh
+```
 
 ### Create embeddings using transformer
