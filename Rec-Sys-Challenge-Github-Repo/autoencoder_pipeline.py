@@ -32,16 +32,16 @@ class Config:
     STATS_NUM_DAYS = [1, 2, 7, 30, 90]
     STATS_TOP_N = 10
 
-    LOAD_FROM_EXISTING_EMBEDDINGS = False
+    LOAD_FROM_EXISTING_EMBEDDINGS = True
     INPUT_FEATURES_DIR = "./raw_features_2"
     
     # Autoencoder params
     USE_DEEPER_AUTOENCODER = True
     USE_LR_SCHEDULING = True
     EMBEDDING_DIM = 180
-    AE_EPOCHS = 128
+    AE_EPOCHS = 100
     AE_BATCH_SIZE = 256
-    AE_LEARNING_RATE = 0.001 
+    AE_LEARNING_RATE = 1e-3
 
 
 
@@ -121,7 +121,7 @@ class Autoencoder_deeper(nn.Module):
         return self.encoder(x) # uses the encoder to get the final embeddings here
 
 
-class Autoencoder_wider_deeper(nn.Module):
+class Autoencoder_wider_deeper(nn.Module): #add dropout twice and batch normalization, common recommendations to make a model generalize better
     def __init__(self, input_dim, embedding_dim):
         super(Autoencoder_wider_deeper, self).__init__()
         self.encoder = nn.Sequential(
@@ -133,17 +133,20 @@ class Autoencoder_wider_deeper(nn.Module):
             
             nn.Linear(512, 256),             
             nn.ReLU(),
-            #nn.Linear(256, 256),             
-            #nn.ReLU(),
+            nn.Linear(256, 256),             
+            nn.ReLU(),
             nn.Dropout(0.2),                 
             nn.Linear(256, embedding_dim)   
         )
         
         self.decoder = nn.Sequential(
             nn.Linear(embedding_dim, 256),
+            nn.BatchNorm1d(256)
             nn.ReLU(),
-            #nn.Linear(512, 256),             
-            #nn.ReLU(),
+
+            
+            nn.Linear(512, 256),             
+            nn.ReLU(),
             nn.Linear(256, 512),             
             nn.ReLU(),
             nn.Linear(512, input_dim),
@@ -163,17 +166,18 @@ class Autoencoder_wider_deeper(nn.Module):
 
 def main(params):
 
-    data_dir_arg = params.data_dir
-
-    embeddings_dir_arg = params.embeddings_dir
-
-    if(data_dir_arg):
-        Config.DATA_DIR = data_dir_arg
-    print(f"configured data dir to: {Config.DATA_DIR}")
-
-    if(embeddings_dir_arg): 
-        Config.OUTPUT_DIR = embeddings_dir_arg
-    print(f"configured embeddings dir to: {Config.OUTPUT_DIR}")
+    if(params):
+        data_dir_arg = params.data_dir
+    
+        embeddings_dir_arg = params.embeddings_dir
+    
+        if(data_dir_arg):
+            Config.DATA_DIR = data_dir_arg
+        print(f"configured data dir to: {Config.DATA_DIR}")
+    
+        if(embeddings_dir_arg): 
+            Config.OUTPUT_DIR = embeddings_dir_arg
+        print(f"configured embeddings dir to: {Config.OUTPUT_DIR}")
 
    
     print("\n Loading and pre-processing data...")
@@ -323,14 +327,21 @@ def main(params):
 
     if(Config.USE_DEEPER_AUTOENCODER):
         autoencoder = Autoencoder_deeper(input_dim_ae, Config.EMBEDDING_DIM).to(device)
-        print("Using the deeper autoencoder model, one extra layer babyyy")
+        print(f"Using the deeper autoencoder model, embedding dim {Config.EMBEDDING_DIM}")
     else:  
         autoencoder = Autoencoder(input_dim_ae, Config.EMBEDDING_DIM).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(autoencoder.parameters(), lr=Config.AE_LEARNING_RATE)
     # try scheduling the LR: https://stackoverflow.com/questions/63108131/pytorch-schedule-learning-rate 
     if(Config.USE_LR_SCHEDULING):
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=3, verbose=True)
+        #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=3, threshold=Config.AE_LEARNING_RATE, verbose=True)
+
+        scheduler = optim.lr_scheduler.OneCycleLR(
+        optimizer, 
+        max_lr=Config.AE_LEARNING_RATE, 
+        steps_per_epoch=len(dataloader), 
+        epochs=Config.AE_EPOCHS
+        )
         print("Using LR Scheduling")
     
     autoencoder.train()
@@ -344,11 +355,15 @@ def main(params):
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item() * batch_features.size(0)
-        
+            if(Config.USE_LR_SCHEDULING):
+                scheduler.step()
         epoch_loss /= len(dataloader.dataset)
         print(f"  - Epoch [{epoch+1}/{Config.AE_EPOCHS}], Loss: {epoch_loss:.6f}")
         if(Config.USE_LR_SCHEDULING):
-            scheduler.step(epoch_loss)
+            print(f"learning rate: {str(scheduler.get_last_lr())}")
+            pass
+            #print("scheduler step")
+            #scheduler.step(epoch_loss)
 
     # Generate fiinal embeddings 
     print("\n Generating final embeddings")
@@ -377,21 +392,22 @@ def main(params):
     np.save(client_ids_path, client_ids_to_save)
 
 
-    #EXPERIMENT: Concatenating them side by side with the original features, like gabriel's idea
-    scaler_raw = MinMaxScaler()
-    scaled_raw_features = scaler_raw.fit_transform(all_user_features_filled)
-    
-    scaler_ae = MinMaxScaler()
-    scaled_ae_embeddings = scaler_ae.fit_transform(final_embeddings_numpy)
-    
-    # Concatenate them side-by-side
-    hybrid_embeddings = np.concatenate([scaled_raw_features, scaled_ae_embeddings], axis=1)
-    
-    print(f"Final hybrid embedding shape: {hybrid_embeddings.shape}") # Should be (N, 1430)
-    
-    # Convert to float16 and save this new hybrid embedding
-    hybrid_embeddings_f16 = hybrid_embeddings.astype(np.float16)
-    np.save(output_dir / "hybrid_embeddings.npy", hybrid_embeddings_f16)
+    if(1 == 2):
+        #EXPERIMENT: Concatenating them side by side with the original features, like gabriel's idea
+        scaler_raw = MinMaxScaler()
+        scaled_raw_features = scaler_raw.fit_transform(all_user_features_filled)
+        
+        scaler_ae = MinMaxScaler()
+        scaled_ae_embeddings = scaler_ae.fit_transform(final_embeddings_numpy)
+        
+        # Concatenate them side-by-side
+        hybrid_embeddings = np.concatenate([scaled_raw_features, scaled_ae_embeddings], axis=1)
+        
+        print(f"Final hybrid embedding shape: {hybrid_embeddings.shape}") # Should be (N, 1430)
+        
+        # Convert to float16 and save this new hybrid embedding
+        hybrid_embeddings_f16 = hybrid_embeddings.astype(np.float16)
+        np.save(output_dir / "hybrid_embeddings.npy", hybrid_embeddings_f16)
 
 
     
