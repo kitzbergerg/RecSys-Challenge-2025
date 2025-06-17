@@ -141,7 +141,7 @@ class Autoencoder_wider_deeper(nn.Module): #add dropout twice and batch normaliz
         
         self.decoder = nn.Sequential(
             nn.Linear(embedding_dim, 256),
-            nn.BatchNorm1d(256)
+            nn.BatchNorm1d(256),
             nn.ReLU(),
 
             
