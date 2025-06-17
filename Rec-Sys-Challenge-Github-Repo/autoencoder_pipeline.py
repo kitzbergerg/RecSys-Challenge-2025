@@ -23,23 +23,23 @@ class Config:
     CLIENT_IDS_PATH = os.path.join(DATA_DIR, "input/relevant_clients.npy") 
     OUTPUT_DIR = "./output_deep_100ep"
 
-    SAVE_RAW_FEATURES = False
+    SAVE_RAW_FEATURES = False # Whether to save the raw features after engineering to the below folder or not
     SAVE_RAW_FEATURES_DIR = "./raw_features_2"
     EMBEDDINGS_OUTPUT_PATH = os.path.join(OUTPUT_DIR, "embeddings.npy")
-    IS_TEST_RUN = False
+    IS_TEST_RUN = False #Use to run a test run with way fewer samples (relevant client ids), controlled by the below param
     TEST_SAMPLE_SIZE = 2000
    
     STATS_NUM_DAYS = [1, 2, 7, 30, 90]
     STATS_TOP_N = 10
 
-    LOAD_FROM_EXISTING_EMBEDDINGS = False
+    LOAD_FROM_EXISTING_EMBEDDINGS = False  #Skip feature engineering and load existing features in .npy form from the folder below. Note that it needs to have both "embeddings.npy" and "client_ids.npy" files.
     INPUT_FEATURES_DIR = "./raw_features_2"
     
     # Autoencoder params
-    USE_DEEPER_AUTOENCODER = True
-    USE_LR_SCHEDULING = True
-    EMBEDDING_DIM = 180
-    AE_EPOCHS = 120
+    USE_DEEPER_AUTOENCODER = True #Simple switch between the normal autoencoder model and the one with one more layer
+    USE_LR_SCHEDULING = True #Whether to use learning rate scheduling during training
+    EMBEDDING_DIM = 180 #Output dimensions of the autoencoded features
+    AE_EPOCHS = 120 
     AE_BATCH_SIZE = 256
     AE_LEARNING_RATE = 1e-3
 
