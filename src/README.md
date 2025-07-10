@@ -228,7 +228,7 @@ For each task, a leaderboard is created based on the respective task scores. The
 We provide a framework that participants can use to test their solutions. The same code is used in the competition to train models for downstream tasks. Only targets for hidden tasks are not included in the provided code.
 
 ### Requirements
-Requirements are provided in the `requirements.txt` file.
+Requirements are provided in the `src/requirements.in` file.
 
 ### Data Splitting
 Running the competition code for internal tests requires splitting raw event data into three distinct time windows: input events, events to compute train target, and events to compute validation target.

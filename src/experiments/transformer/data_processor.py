@@ -339,7 +339,7 @@ def calculate_statistics(df: pd.DataFrame):
 def create_data_processing_pipeline(
         data_dir: Path,
         sequences_path: Path,
-        task: Optional[str],
+        task: Optional[str] = None,
         rebuild_vocab: bool = False,
         max_seq_length: int = MAX_SEQUENCE_LENGTH
 ) -> Tuple[UserSequenceDataset, Dict[str, int]]:
