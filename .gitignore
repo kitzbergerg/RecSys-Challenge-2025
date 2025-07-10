@@ -1,7 +1,6 @@
 .idea
 
 data/
-models/
 results/
 
 src/.neptune/*
