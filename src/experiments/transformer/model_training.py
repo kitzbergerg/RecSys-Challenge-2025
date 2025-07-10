@@ -8,12 +8,12 @@ from pathlib import Path
 from pytorch_lightning.callbacks import RichProgressBar
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from embeddings_transformer.data_module import DataModule
-from embeddings_transformer.data_processor import create_data_processing_pipeline
-from embeddings_transformer.dataset import reconstructive_collate_fn
-from embeddings_transformer.dataset_contrastive import contrastive_collate_fn
-from embeddings_transformer.metrics import MultiClassMetricCalculator, MultiTaskLoss
-from embeddings_transformer.model import UserBehaviorTransformer
+from experiments.transformer.data_module import DataModule
+from experiments.transformer.data_processor import create_data_processing_pipeline
+from experiments.transformer.dataset import reconstructive_collate_fn
+from experiments.transformer.dataset_contrastive import contrastive_collate_fn
+from experiments.transformer.metrics import MultiClassMetricCalculator, MultiTaskLoss
+from experiments.transformer.model import UserBehaviorTransformer
 
 
 class TransformerModel(pl.LightningModule):

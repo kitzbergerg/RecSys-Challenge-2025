@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from IPython.display import display
 
-from custom_pipline.constants import (
+from experiments.autoencoder.constants import (
     EVENT_TYPE_TO_COLUMNS, EventTypes,
 )
 from data_utils.utils import (
@@ -14,7 +14,7 @@ from data_utils.utils import (
     join_properties
 )
 from data_utils.data_dir import DataDir
-from custom_pipline.features_aggregator import (
+from experiments.autoencoder.features_aggregator import (
     FeaturesAggregator,
 )
 

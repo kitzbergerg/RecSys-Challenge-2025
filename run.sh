@@ -13,17 +13,17 @@ pip install --upgrade pip
 echo "Installing dependencies from requirements.txt..."
 pip install -r requirements.txt
 
-echo "Changing to the Rec-Sys-Challenge-Github-Repo directory..."
-cd Rec-Sys-Challenge-Github-Repo
+echo "Changing to the src directory..."
+cd src
 
 echo "Running autoencoder pipeline..."
 python3 ./autoencoder_pipeline.py \
-  --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ \
+  --data-dir ../data/original/ \
   --embeddings-dir ../embeddings
 
 echo "Running validator..."
 python -m validator.run \
-  --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ \
+  --data-dir ../data/original/ \
   --embeddings-dir ../embeddings
 
 echo "All tasks completed successfully."

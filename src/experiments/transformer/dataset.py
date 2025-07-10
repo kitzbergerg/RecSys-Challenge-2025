@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 import random
 
-from embeddings_transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
+from experiments.transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
 
 
 def mask_whole_event(sequence, idx):

@@ -6,9 +6,9 @@ import pickle
 from collections import defaultdict
 import re
 
-from embeddings_transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
-from embeddings_transformer.dataset import UserSequenceDataset
-from embeddings_transformer.dataset_contrastive import UserSequenceContrastiveDataset
+from experiments.transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
+from experiments.transformer.dataset import UserSequenceDataset
+from experiments.transformer.dataset_contrastive import UserSequenceContrastiveDataset
 
 
 class EventSequenceProcessor:

@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from datetime import timedelta
 from typing import List
 
-from custom_pipline.constants import (
+from experiments.autoencoder.constants import (
     EMBEDDINGS_DTYPE,
 )
 

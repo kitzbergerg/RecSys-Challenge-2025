@@ -13,18 +13,18 @@ pip install --upgrade pip
 echo "Installing dependencies from requirements.txt..."
 pip install -r requirements.txt
 
-echo "Changing to the Rec-Sys-Challenge-Github-Repo directory..."
-cd Rec-Sys-Challenge-Github-Repo
+echo "Changing to the src directory..."
+cd src
 
 echo "Creating dataset..."
-python -m embeddings_transformer.data_processor --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ --output-dir ../data/sequence/
+python -m experiments.transformer.data_processor --data-dir ../data/original/ --output-dir ../data/sequence/
 echo "Make sure to switch between tasks (reconstruction/contrastive)!"
 echo "Training transformer..."
-python -m embeddings_transformer.model_training --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ --sequences-path ../data/sequence/ --task=reconstruction
+python -m experiments.transformer.model_training --data-dir ../data/original/ --sequences-path ../data/sequence/ --task=reconstruction
 
 echo "Make sure to set the CHECKPOINT_PATH env variable to the model after training!"
 echo "Creating embeddings..."
-python -m embeddings_transformer.create_embeddings --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ --embeddings-dir ../results/transformer/ --sequences-path ../data/sequence/ --checkpoint-path $CHECKPOINT_PATH
+python -m experiments.transformer.create_embeddings --data-dir ../data/original/ --embeddings-dir ../results/transformer/ --sequences-path ../data/sequence/ --checkpoint-path $CHECKPOINT_PATH
 
 echo "Running validator..."
-python -m validator.run --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ --embeddings-dir ../results/transformer/
+python -m validator.run --data-dir ../data/original/ --embeddings-dir ../results/transformer/

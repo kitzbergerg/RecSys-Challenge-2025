@@ -13,11 +13,11 @@ pip install --upgrade pip
 echo "Installing dependencies from requirements.txt..."
 pip install -r requirements.txt
 
-echo "Changing to the Rec-Sys-Challenge-Github-Repo directory..."
-cd Rec-Sys-Challenge-Github-Repo
+echo "Changing to the src directory..."
+cd src
 
 echo "Running contrastive pipeline..."
-python3 contrastive_embeddings/contrastive_enhanced.py --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ --embeddings-dir ../embeddings
+python -m experiments.contrastive_embeddings.contrastive_enhanced --data-dir ../data/original/ --embeddings-dir ../embeddings
 
 echo "Running validator..."
-python -m validator.run --data-dir /home/jovyan/shared/194.035-2025S/data/group_project/data_new/ --embeddings-dir ../embeddings
+python -m validator.run --data-dir ../data/original/ --embeddings-dir ../embeddings

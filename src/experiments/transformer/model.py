@@ -3,7 +3,7 @@ from typing import Dict, Tuple, Union
 import torch
 from torch import nn
 
-from embeddings_transformer.constants import TEXT_EMB_DIM, MAX_SEQUENCE_LENGTH
+from experiments.transformer.constants import TEXT_EMB_DIM, MAX_SEQUENCE_LENGTH
 
 
 class UserBehaviorTransformer(nn.Module):

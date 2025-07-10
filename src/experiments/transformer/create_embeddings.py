@@ -5,9 +5,9 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from embeddings_transformer.data_processor import EventSequenceProcessor, read_filtered_parquet
-from embeddings_transformer.dataset import reconstructive_collate_fn, UserSequenceDataset
-from embeddings_transformer.model_training import TransformerModel
+from experiments.transformer.data_processor import EventSequenceProcessor, read_filtered_parquet
+from experiments.transformer.dataset import reconstructive_collate_fn, UserSequenceDataset
+from experiments.transformer.model_training import TransformerModel
 
 
 def load_embedding_dataset(

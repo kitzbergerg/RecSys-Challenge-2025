@@ -4,8 +4,8 @@ import numpy as np
 from enum import Enum
 from tqdm import tqdm
 from pathlib import Path
-from custom_pipline.features_aggregator import FeaturesAggregator
-from custom_pipline.constants import QUERY_COLUMN, EMBEDDINGS_DTYPE, EventTypes
+from experiments.autoencoder.features_aggregator import FeaturesAggregator
+from experiments.autoencoder.constants import QUERY_COLUMN, EMBEDDINGS_DTYPE, EventTypes
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -19,7 +19,7 @@ I experimented with this based on loose tutorials and adapting them to our calcu
 
 class Config:
 
-    DATA_DIR = "/home/jovyan/shared/194.035-2025S/data/group_project/data_new/"
+    DATA_DIR = "../data/original/"
     CLIENT_IDS_PATH = os.path.join(DATA_DIR, "input/relevant_clients.npy") 
     OUTPUT_DIR = "./output_deep_100ep"
 

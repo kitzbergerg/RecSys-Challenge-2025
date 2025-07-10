@@ -7,8 +7,8 @@ import torch
 from torch.utils.data import Dataset
 import random
 
-from embeddings_transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
-from embeddings_transformer.dataset import mask_whole_event
+from experiments.transformer.constants import MAX_SEQUENCE_LENGTH, TEXT_EMB_DIM
+from experiments.transformer.dataset import mask_whole_event
 
 
 def mask_event(sequence, idx):

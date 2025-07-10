@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from custom_pipline.calculators import (
+from experiments.autoencoder.calculators import (
     Calculator,
     StatsFeaturesCalculator,
     QueryFeaturesCalculator,
@@ -21,7 +21,7 @@ from custom_pipline.calculators import (
     ProductNameFeaturesCalculator,
     RemoveFromCartCalculator
 )
-from custom_pipline.constants import (
+from experiments.autoencoder.constants import (
     EventTypes,
     EVENT_TYPE_TO_COLUMNS,
     QUERY_COLUMN,
