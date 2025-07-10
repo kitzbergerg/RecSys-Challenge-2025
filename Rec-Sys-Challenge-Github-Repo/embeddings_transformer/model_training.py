@@ -91,9 +91,6 @@ class TransformerModel(pl.LightningModule):
         pos_sim = torch.sum(anchor_emb * positive_emb, dim=1) / self.contrastive_temperature  # [batch_size]
         neg_sim = torch.sum(anchor_emb * negative_emb, dim=1) / self.contrastive_temperature  # [batch_size]
 
-        # Contrastive loss: -log(exp(pos_sim) / (exp(pos_sim) + exp(neg_sim)))
-        # This is equivalent to: -pos_sim + log(exp(pos_sim) + exp(neg_sim))
-        # Using logsumexp for numerical stability
         logits = torch.stack([pos_sim, neg_sim], dim=1)  # [batch_size, 2]
         labels = torch.zeros(anchor_emb.size(0), dtype=torch.long, device=anchor_emb.device)  # positive is index 0
 
