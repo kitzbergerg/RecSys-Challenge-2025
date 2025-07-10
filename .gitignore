@@ -2,8 +2,3 @@
 
 data/
 results/
-
-src/.neptune/*
-src/training_pipeline/.ipynb_checkpoints
-scores/.ipynb_checkpoints
-**/.ipynb_checkpoints/
