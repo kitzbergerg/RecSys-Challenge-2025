@@ -128,3 +128,89 @@ TOTAL STATISTICS:
 ------------------------------
   Total events       : 20,770,519
 ```
+
+## rel_clients
+
+```text
+EVENT TYPE COUNTS:
+------------------------------
+  page_visit          : 26,864,045
+  search_query        : 2,531,596
+  add_to_cart         : 1,882,143
+  product_buy         : 1,071,626
+  remove_from_cart    : 800,654
+
+UNIQUE ENTITY COUNTS:
+------------------------------
+  client_id          : 1,000,000
+  sku                : 4,536
+  category           : 6,187
+  url                : 26,847
+  price              : 100
+
+SEQUENCE LENGTH STATISTICS:
+------------------------------
+  Number of sequences: 1,000,000
+  Mean:               33.15
+  Median:             15.00
+  Std Dev:            40.41
+  Min:                1
+  Max:                128
+  Quantiles:
+       1%:          1
+       5%:          1
+      10%:          1
+      25%:          3
+      50%:         15
+      75%:         47
+      90%:        117
+      95%:        128
+      99%:        128
+
+TOTAL STATISTICS:
+------------------------------
+  Total events       : 33,150,064
+```
+
+## active_clients
+
+```text
+EVENT TYPE COUNTS:
+------------------------------
+  page_visit          : 16,816,912
+  search_query        : 1,563,580
+  add_to_cart         : 1,265,459
+  product_buy         : 1,071,626
+  remove_from_cart    : 529,526
+
+UNIQUE ENTITY COUNTS:
+------------------------------
+  client_id          : 510,971
+  sku                : 4,536
+  category           : 6,063
+  url                : 26,827
+  price              : 100
+
+SEQUENCE LENGTH STATISTICS:
+------------------------------
+  Number of sequences: 510,971
+  Mean:               41.58
+  Median:             23.00
+  Std Dev:            44.68
+  Min:                1
+  Max:                128
+  Quantiles:
+       1%:          1
+       5%:          1
+      10%:          1
+      25%:          3
+      50%:         23
+      75%:         67
+      90%:        128
+      95%:        128
+      99%:        128
+
+TOTAL STATISTICS:
+------------------------------
+  Total events       : 21,247,103
+```
